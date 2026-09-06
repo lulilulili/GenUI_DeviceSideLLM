@@ -1,0 +1,41 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>GenUI · 架构流程</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/docs.css"></head><body>
+<header><a class="brand" href="/">G<span>GenUI LAB</span></a><nav><a href="/">运行调试</a><a class="active" href="/architecture">架构流程</a><a href="/morpheme">Morpheme 协议</a><a href="/layout">布局引擎</a></nav><span class="badge">ARCHITECTURE / v0.2</span></header>
+<main class="docs-shell"><div class="doc-heading"><div><small>SYSTEM MAP</small><h1>从自然语言到可渲染界面</h1><p>模型只决定语义组件；其余阶段由确定性代码完成。悬浮查看摘要，点击节点可在下方检查输入、输出和设计边界。</p></div><div class="legend"><span><i class="model-dot"></i>模型阶段</span><span><i class="code-dot"></i>确定性阶段</span><span><i class="future-dot"></i>生产替换点</span></div></div>
+
+<section class="flow-board" aria-label="GenUI 主流程图">
+  <div class="flow-lane"><span class="lane-label">理解</span>
+    <button class="flow-card code" data-title="用户输入" data-input="自然语言、卡片尺寸" data-output="清理后的 Prompt" data-desc="去除首尾空白并检查输入是否为空。卡片尺寸作为独立信息预算传入，不依赖用户在正文里重复描述。"><b>01</b><strong>用户输入</strong><small>Prompt + Card Size</small></button><span class="connector">→</span>
+    <button class="flow-card code" data-title="Prompt / Schema" data-input="Prompt、2×1/2×2/3×2/3×3" data-output="短系统提示词、动态 JSON Schema" data-desc="根据卡片尺寸收紧 Morpheme 最大数量。系统提示词解释组件选择与数据类型，Schema 限制字段和枚举。"><b>02</b><strong>约束构建</strong><small>Prompt + Schema</small></button><span class="connector">→</span>
+    <button class="flow-card model" data-title="端侧模型生成" data-input="约 250～350 input token" data-output="MorphemeDraft" data-desc="Qwen2.5 3B 只输出 surface、标题，以及组件类型、角色、标签、semanticKey、valueType，不生成 HTML、CSS、坐标和真实 API。"><b>03</b><strong>LLM 生成</strong><small>MorphemeDraft</small></button>
+  </div>
+  <div class="flow-turn">↓</div>
+  <div class="flow-lane"><span class="lane-label">规范</span>
+    <button class="flow-card code" data-title="JSON 与协议校验" data-input="模型原始文本" data-output="合法 Draft 或纠错请求" data-desc="检查 JSON、必填字段、枚举和尺寸对应的数量上限。失败最多触发一次定向纠错。"><b>04</b><strong>协议校验</strong><small>Decode + Validate</small></button><span class="connector">→</span>
+    <button class="flow-card code" data-title="Morpheme 确定性补齐" data-input="精简 Draft" data-output="完整 MorphemeSpec" data-desc="补充稳定 ID、默认优先级、actionKey 和展示元数据。模型不需要为这些机械字段消耗 Token。"><b>05</b><strong>字段补齐</strong><small>MorphemeSpec</small></button><span class="connector">→</span>
+    <button class="flow-card code" data-title="类型一致性校正" data-input="type、valueType、semanticKey" data-output="一致的组件与数据类型" data-desc="气温映射 NUMBER/METRIC，湿度与电量映射 PERCENTAGE，天气和连接状态映射 ENUM/STATUS；复合 semanticKey 会被拆分。"><b>06</b><strong>类型校正</strong><small>Type Reconcile</small></button>
+  </div>
+  <div class="flow-turn">↓</div>
+  <div class="flow-lane"><span class="lane-label">编排</span>
+    <button class="flow-card code" data-title="信息预算" data-input="MorphemeSpec、卡片尺寸" data-output="保留、降级和裁剪结果" data-desc="按组件空间成本控制丰度。小卡片可将次级 PROGRESS 降级为 METRIC；空间仍不足时按角色与优先级裁剪。"><b>07</b><strong>信息预算</strong><small>2×1 / 2×2 / 3×2 / 3×3</small></button><span class="connector">→</span>
+    <button class="flow-card future" data-title="Mock 数据适配" data-input="semanticKey、valueType" data-output="可渲染的演示数据" data-desc="Demo 根据语义和数据类型注入天气、温度、百分比等 Mock 值。生产落地时，这里替换为应用 API Adapter。"><b>08</b><strong>Mock 数据</strong><small>Production Replace Point</small></button><span class="connector">→</span>
+    <button class="flow-card code" data-title="布局规划" data-input="组件、角色、优先级、尺寸" data-output="LayoutPlan" data-desc="先按尺寸筛选 PDF 设计范式，再依据组件族与占地、role、priority 做全局评分和槽位分配；必要时留白补位或进入自由布局。"><b>09</b><strong>布局模板</strong><small>LayoutPlan</small></button>
+  </div>
+  <div class="flow-turn">↓</div>
+  <div class="flow-lane"><span class="lane-label">输出</span>
+    <button class="flow-card code" data-title="RenderSpec" data-input="MorphemeSpec、LayoutPlan" data-output="与框架无关的组件树" data-desc="RenderSpec 是浏览器预览和代码生成的共同唯一输入，确保预览结果与导出代码来源一致。"><b>10</b><strong>RenderSpec</strong><small>UI Contract</small></button><span class="connector">→</span>
+    <button class="flow-card code" data-title="协议生成" data-input="RenderSpec" data-output="DSL / A2UI v0.9 / HTML+CSS" data-desc="协议适配器消费同一 RenderSpec。DSL 对接 _askr mini-parser，A2UI 输出 v0.9 NDJSON，HTML/CSS 用于 H5 演示。"><b>11</b><strong>协议适配</strong><small>DSL · A2UI · H5</small></button><span class="connector">→</span>
+    <button class="flow-card code" data-title="界面渲染" data-input="选定协议与 RenderSpec" data-output="可视化、可交互的卡片" data-desc="当前网页直接渲染 RenderSpec；DSL 与 A2UI 可交给 _askr 的 parser、UIGraph 和组件注册表渲染。"><b>12</b><strong>实时预览</strong><small>Protocol Renderer</small></button>
+  </div>
+</section>
+
+<section class="node-inspector" id="nodeInspector" aria-live="polite"><div><small>SELECTED NODE</small><h2 id="nodeTitle">点击任一节点查看细节</h2><p id="nodeDesc">流程图中的每个节点都对应工作台时间线里的一个可观测阶段。</p></div><dl><div><dt>输入</dt><dd id="nodeInput">—</dd><pre id="nodeInputExample">点击节点后显示输入范本</pre></div><div><dt>输出</dt><dd id="nodeOutput">—</dd><pre id="nodeOutputExample">点击节点后显示输出范本</pre></div></dl></section>
+
+<div class="doc-grid"><article><small>MODEL BOUNDARY</small><h2>模型只负责选择语义组件</h2><p>模型输出的是精简 MorphemeDraft。真实数值、组件默认值、布局坐标和代码结构均不由模型生成，因此可以缩短输出并减少随机性。</p></article><article><small>DEMO BOUNDARY</small><h2>当前假设语义能力均可实现</h2><p>Demo 不建设真实应用能力注册中心，使用 MockDataProvider 提供数据。未来只替换第 08 节点，Morpheme、布局和渲染协议无需推倒重来。</p></article></div>
+<section class="panel"><h2>统一可观测事件</h2><pre>{
+  "stage": "type_reconcile",
+  "status": "completed",
+  "elapsedMs": 0.18,
+  "input": { "...": "MorphemeSpec" },
+  "output": { "spec": {}, "corrections": [] }
+}</pre><p>所有节点都使用同一事件结构。模型调用额外返回 inputTokens、outputTokens、prefillMs 和 decodeMs；确定性节点不消耗模型 Token。</p></section>
+</main><link rel="stylesheet" href="/dark.css"><link rel="stylesheet" href="/architecture-examples.css"><script src="/docs.js"></script></body></html>

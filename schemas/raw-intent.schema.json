@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://genui.local/schemas/raw-intent-v1.json",
+  "title": "RawIntentSpec v1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "intentType", "domain", "goalType", "tasks", "presentation", "resolution"],
+  "properties": {
+    "version": {"const": "1.0"},
+    "intentType": {"enum": ["QUERY", "CONTROL", "CREATE", "EDIT", "DELETE", "NAVIGATE", "COMMUNICATE", "RECOMMEND", "MONITOR", "AUTOMATE", "UNKNOWN"]},
+    "domain": {"enum": ["SMART_HOME", "WEATHER", "DEVICE", "CONTENT", "TASK"]},
+    "goalType": {"enum": ["OBTAIN_INFORMATION", "CHANGE_STATE", "COMPLETE_TASK", "CREATE_CONTENT", "MAKE_DECISION", "TRACK_PROGRESS", "OBTAIN_EMOTIONAL_SUPPORT", "REDUCE_EFFORT", "OTHER", "UNKNOWN"]},
+    "tasks": {"type": "array", "minItems": 1, "maxItems": 8, "items": {"$ref": "#/$defs/task"}},
+    "presentation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["surfaceType", "interactionMode", "density", "requestedSize"],
+      "properties": {
+        "surfaceType": {"enum": ["AUTO", "CARD", "PAGE", "FORM", "DIALOG", "NOTIFICATION", "WIDGET", "OVERLAY"]},
+        "interactionMode": {"enum": ["VIEW", "CONTROL", "EDIT", "SELECT", "CONFIRM", "AUTO"]},
+        "density": {"enum": ["AUTO", "COMPACT", "NORMAL", "DETAILED"]},
+        "requestedSize": {"type": ["string", "null"]}
+      }
+    },
+    "resolution": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "certainty", "missingFields"],
+      "properties": {
+        "status": {"enum": ["RESOLVED", "NEEDS_CONTEXT", "NEEDS_CLARIFICATION", "UNSUPPORTED"]},
+        "certainty": {"enum": ["HIGH", "MEDIUM", "LOW"]},
+        "missingFields": {"type": "array", "uniqueItems": true, "items": {"enum": ["DOMAIN", "ENTITY", "OPERATION", "PROPERTY", "VALUE", "TIME", "LOCATION", "RECIPIENT", "CONTENT", "CONDITION"]}}
+      }
+    }
+  },
+  "$defs": {
+    "task": {
+      "type": "object", "additionalProperties": false,
+      "required": ["taskId", "entity", "operation", "parameters", "contexts", "dependsOn"],
+      "properties": {
+        "taskId": {"type": "string", "pattern": "^task_[1-9][0-9]*$"},
+        "entity": {"$ref": "#/$defs/entity"},
+        "operation": {"$ref": "#/$defs/operation"},
+        "parameters": {"type": "array", "items": {"$ref": "#/$defs/parameter"}},
+        "contexts": {"type": "array", "items": {"$ref": "#/$defs/context"}},
+        "dependsOn": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^task_[1-9][0-9]*$"}}
+      }
+    },
+    "entity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["entityType", "entityCategoryKey", "entityMention", "referenceType"],
+      "properties": {
+        "entityType": {"enum": ["DEVICE", "INFORMATION", "CONTENT", "PERSON", "EVENT", "TASK", "MEDIA", "LOCATION", "SERVICE", "SETTING", "MESSAGE", "REMINDER", "AUTOMATION", "OTHER", "UNKNOWN"]},
+        "entityCategoryKey": {"type": ["string", "null"]}, "entityMention": {"type": ["string", "null"]},
+        "referenceType": {"enum": ["EXPLICIT", "PRONOUN", "PREVIOUS", "CURRENT", "SELF", "UNSPECIFIED", "UNKNOWN"]}
+      }
+    },
+    "operation": {
+      "type": "object", "additionalProperties": false, "required": ["operationType", "propertyKey"],
+      "properties": {
+        "operationType": {"enum": ["GET", "SET", "INCREASE", "DECREASE", "TOGGLE", "START", "STOP", "OPEN", "CLOSE", "CREATE", "UPDATE", "DELETE", "SEARCH", "SELECT", "COMPARE", "SHARE", "SEND", "SCHEDULE", "CANCEL", "CONFIRM", "OTHER", "UNKNOWN"]},
+        "propertyKey": {"type": ["string", "null"]}
+      }
+    },
+    "parameter": {
+      "type": "object", "additionalProperties": false,
+      "required": ["parameterKey", "value", "valueType", "expressionType", "direction", "degree", "unit", "valueSource"],
+      "properties": {
+        "parameterKey": {"type": "string"}, "value": {"type": ["string", "number", "boolean", "null"]},
+        "valueType": {"enum": ["STRING", "NUMBER", "BOOLEAN", "ENUM", "DATE", "TIME", "DATETIME", "DURATION", "LOCATION", "REFERENCE", "NONE", "UNKNOWN"]},
+        "expressionType": {"enum": ["EXACT", "RELATIVE", "MINIMUM", "MAXIMUM", "RANGE", "DEFAULT", "PREFERENCE", "UNSPECIFIED", "UNKNOWN"]},
+        "direction": {"enum": ["INCREASE", "DECREASE", null]}, "degree": {"enum": ["SLIGHT", "NORMAL", "LARGE", "UNKNOWN", null]},
+        "unit": {"type": ["string", "null"]}, "valueSource": {"enum": ["USER", "CONTEXT", "DEFAULT", "INFERRED"]}
+      }
+    },
+    "context": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contextType", "value", "temporalType", "valueSource"],
+      "properties": {
+        "contextType": {"enum": ["LOCATION", "TIME", "EVENT", "ACTIVITY", "USER", "DEVICE", "APPLICATION", "CONVERSATION", "OTHER"]},
+        "value": {"type": ["string", "number", "boolean", "null"]},
+        "temporalType": {"enum": ["NOW", "ABSOLUTE", "RELATIVE", "RANGE", "RECURRING", "IMMINENT", "UNSPECIFIED", "UNKNOWN"]},
+        "valueSource": {"enum": ["USER", "CONTEXT", "DEFAULT", "INFERRED"]}
+      }
+    }
+  }
+}

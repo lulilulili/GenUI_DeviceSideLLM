@@ -1,0 +1,5 @@
+.node-inspector{grid-template-columns:minmax(240px,.8fr) minmax(0,1.4fr)}
+.node-inspector dl{align-items:stretch}
+.node-inspector dl>div{min-width:0;display:flex;flex-direction:column}
+.node-inspector pre{margin-top:12px;min-height:105px;max-height:220px;font-size:12px;white-space:pre-wrap}
+@media(max-width:900px){.node-inspector{grid-template-columns:1fr}.node-inspector dl{grid-template-columns:1fr}}
