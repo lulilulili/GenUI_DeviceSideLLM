@@ -1,0 +1,50 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>GenUI · Morpheme 协议</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/docs.css"><link rel="stylesheet" href="/graph.css"></head><body>
+<header><a class="brand" href="/">G<span>GenUI LAB</span></a><nav><a href="/">运行调试</a><a href="/architecture">架构流程</a><a class="active" href="/morpheme">Morpheme 协议</a><a href="/layout">布局引擎</a></nav><span class="badge">MORPHEME / v0.2</span></header>
+<main class="docs-shell"><section class="protocol-hero"><div><small>UI SEMANTIC CONTRACT</small><h1>Morpheme 是模型与布局引擎之间的协议</h1><p>模型输出精简 Draft，表达“需要哪些语义组件”；代码将其补齐为 MorphemeSpec，再交给信息预算、布局和渲染阶段。它不是 HTML，也不是业务 API。</p><pre>{
+  "s":"CARD", "z":"2x2", "d":"AUTO", "t":"上海天气",
+  "m":[
+    {"k":"STATUS", "r":"PRIMARY", "l":"天气", "q":"weather.condition", "f":"ENUM"},
+    {"k":"METRIC", "r":"SECONDARY", "l":"气温", "q":"weather.temperature", "f":"NUMBER"},
+    {"k":"PROGRESS", "r":"SECONDARY", "l":"湿度", "q":"weather.humidity", "f":"PERCENTAGE"}
+  ]
+}</pre></div><nav class="toc" aria-label="本页目录"><h2>协议目录</h2><a href="#top">顶层字段</a><a href="#item">Morpheme 字段</a><a href="#components">组件类型</a><a href="#roles">语义角色</a><a href="#values">数据类型</a><a href="#sizes">尺寸与预算</a><a href="#normalize">确定性补齐</a><a href="#examples">示例</a></nav></section>
+
+<section class="spec-section"><small>STRUCTURE VIEW</small><h2>一份模型输出如何组成卡片</h2><p>根节点描述整张卡片；每条分支是一项独立 Morpheme。组件类型决定形态，角色决定布局优先级，数据类型决定值如何填充和格式化。</p><div class="morph-graph static-graph"><div class="graph-tree"><article class="graph-root"><small>MORPHEME DRAFT</small><strong>上海天气</strong><div class="graph-tags"><span class="graph-tag surface">CARD</span><span class="graph-tag size">2×2</span><span class="graph-tag density">AUTO</span></div></article><div class="graph-bridge"><i></i><span>m 数组 · 3项</span><i></i></div><div class="graph-children"><article class="graph-item type-status"><b>01</b><div><strong>天气</strong><small>STATUS</small></div><div class="graph-tags"><span class="graph-tag role">PRIMARY</span><span class="graph-tag value">ENUM</span></div><code>weather.condition</code></article><article class="graph-item type-metric"><b>02</b><div><strong>气温</strong><small>METRIC</small></div><div class="graph-tags"><span class="graph-tag role">SECONDARY</span><span class="graph-tag value">NUMBER</span></div><code>weather.temperature</code></article><article class="graph-item type-progress"><b>03</b><div><strong>湿度</strong><small>PROGRESS</small></div><div class="graph-tags"><span class="graph-tag role">SECONDARY</span><span class="graph-tag value">PERCENTAGE</span></div><code>weather.humidity</code></article></div></div></div><div class="graph-reading"><div><b>k · TYPE</b><span>选择视觉组件</span></div><div><b>r · ROLE</b><span>决定信息层级</span></div><div><b>f · VALUE TYPE</b><span>决定数据形态</span></div><div><b>q · SEMANTIC KEY</b><span>标识数据语义</span></div></div></section>
+
+<section class="spec-section" id="top"><small>DRAFT ROOT</small><h2>顶层字段</h2><table class="field-table"><thead><tr><th>短字段</th><th>完整含义</th><th>类型 / 取值</th><th>作用</th></tr></thead><tbody>
+<tr><td><code>s</code></td><td>surface.type</td><td><code>CARD | PAGE</code></td><td>选择卡片或页面级载体；当前主要使用 CARD。</td></tr>
+<tr><td><code>z</code></td><td>surface.size</td><td><code>AUTO | 2x1 | 2x2 | 3x2 | 3x3</code></td><td>信息预算与布局空间。用户在工作台选择后，Schema 会固定该值。</td></tr>
+<tr><td><code>d</code></td><td>surface.density</td><td><code>AUTO | COMPACT | COMFORTABLE | DETAILED</code></td><td>内容密度倾向，不代表具体间距或字号。</td></tr>
+<tr><td><code>t</code></td><td>title</td><td>string / null，建议不超过40字</td><td>卡片标题，使用用户语言。</td></tr>
+<tr><td><code>m</code></td><td>morphemes</td><td>array，1～8项</td><td>语义组件清单，实际最大项数由卡片尺寸动态约束。</td></tr>
+</tbody></table></section>
+
+<section class="spec-section" id="item"><small>DRAFT ITEM</small><h2>每个 Morpheme 的字段</h2><table class="field-table"><thead><tr><th>短字段</th><th>完整含义</th><th>类型</th><th>规则</th></tr></thead><tbody>
+<tr><td><code>k</code></td><td>type</td><td>组件枚举</td><td>描述数据适合的交互与视觉形态。</td></tr>
+<tr><td><code>r</code></td><td>role</td><td>角色枚举</td><td>决定视觉中心、区域分配和裁剪优先级。</td></tr>
+<tr><td><code>l</code></td><td>label</td><td>string / null</td><td>用户可见标签，建议不超过30字。</td></tr>
+<tr><td><code>q</code></td><td>semanticKey</td><td>开放英文字符串</td><td>说明数据或操作语义，如 <code>weather.temperature</code>；不是实际 API。</td></tr>
+<tr><td><code>f</code></td><td>valueType</td><td>数据类型枚举</td><td>连接 Mock 数据、格式化和组件一致性校验。</td></tr>
+</tbody></table><p>模型不生成 <code>id</code>、<code>priority</code>、<code>actionKey</code>、Mock 数值、坐标或 CSS；这些由后续代码补齐。</p></section>
+
+<section class="spec-section" id="components"><small>TYPE ENUM</small><h2>8 类基础组件</h2><div class="component-grid">
+<article class="component-card"><h3>TEXT · 文字</h3><p>段落、摘要、说明和无法进一步结构化的文本。通常搭配 STRING。</p><code>“显示会议结论”</code></article>
+<article class="component-card"><h3>METRIC · 指标</h3><p>突出单个数值、百分比、时间或时长。紧凑卡片中的百分比也可降级为 Metric。</p><code>24°C / 68% / 25分钟</code></article>
+<article class="component-card"><h3>STATUS · 状态</h3><p>只读枚举或布尔状态，不提供修改能力。</p><code>晴 / 已连接 / 运行中</code></article>
+<article class="component-card"><h3>PROGRESS · 进度</h3><p>比例、完成度、容量和剩余量，标准视觉成本为2。</p><code>电量68% / 完成率72%</code></article>
+<article class="component-card"><h3>SWITCH · 开关</h3><p>明确的二态操作。只有用户要求可切换时使用，不能替代只读状态。</p><code>蓝牙 / 灯光电源</code></article>
+<article class="component-card"><h3>SLIDER · 连续调节</h3><p>连续或分级数值控制，标准视觉成本为2。</p><code>亮度 / 音量 / 温度调节</code></article>
+<article class="component-card"><h3>BUTTON · 触发动作</h3><p>点击后触发一次操作，不承载持续状态。</p><code>刷新 / 开始计时 / 查看详情</code></article>
+<article class="component-card"><h3>LIST · 同类列表</h3><p>多条结构相近的数据，视觉成本为4；小卡片中容易被裁剪或紧凑化。</p><code>今日待办 / 天气预报</code></article>
+</div></section>
+
+<section class="spec-section" id="roles"><small>ROLE ENUM</small><h2>语义角色与默认优先级</h2><table><thead><tr><th>取值</th><th>默认优先级</th><th>布局含义</th></tr></thead><tbody><tr><td><code>WARNING</code></td><td>100</td><td>异常和风险，最优先保留。</td></tr><tr><td><code>PRIMARY</code></td><td>90</td><td>核心数据和视觉中心。</td></tr><tr><td><code>PRIMARY_ACTION</code></td><td>85</td><td>主要操作，进入 actions 区域。</td></tr><tr><td><code>SECONDARY</code></td><td>60</td><td>辅助状态或指标。</td></tr><tr><td><code>SECONDARY_ACTION</code></td><td>50</td><td>次级操作。</td></tr><tr><td><code>SUPPORTING</code></td><td>30</td><td>补充说明，空间不足时优先裁剪。</td></tr></tbody></table></section>
+
+<section class="spec-section" id="values"><small>VALUE TYPE ENUM</small><h2>数据类型</h2><div class="enum-list"><code>STRING</code><code>NUMBER</code><code>BOOLEAN</code><code>PERCENTAGE</code><code>DURATION</code><code>DATETIME</code><code>ENUM</code><code>LIST</code><code>UNKNOWN</code></div><table><thead><tr><th>类型</th><th>适用内容</th><th>默认组件倾向</th><th>Demo 数据</th></tr></thead><tbody><tr><td>STRING</td><td>说明、摘要</td><td>TEXT</td><td>示例文本</td></tr><tr><td>NUMBER</td><td>气温、数量、金额</td><td>METRIC / SLIDER</td><td>42；气温为24°C</td></tr><tr><td>BOOLEAN</td><td>开关、是否状态</td><td>SWITCH / STATUS</td><td>true</td></tr><tr><td>PERCENTAGE</td><td>湿度、电量、进度</td><td>PROGRESS / METRIC</td><td>68%</td></tr><tr><td>DURATION</td><td>时长、倒计时</td><td>METRIC</td><td>25分钟</td></tr><tr><td>DATETIME</td><td>时间和日期</td><td>METRIC / TEXT</td><td>示例时间</td></tr><tr><td>ENUM</td><td>天气、连接状态</td><td>STATUS</td><td>晴 / 已连接</td></tr><tr><td>LIST</td><td>待办、预报</td><td>LIST</td><td>三条示例项</td></tr><tr><td>UNKNOWN</td><td>触发按钮等无值组件</td><td>BUTTON</td><td>无</td></tr></tbody></table></section>
+
+<section class="spec-section" id="sizes"><small>INFORMATION BUDGET</small><h2>尺寸控制的是布局成本，不只是数量</h2><table><thead><tr><th>尺寸</th><th>最大语素</th><th>预算</th><th>推荐内容</th></tr></thead><tbody><tr><td><code>2x1</code></td><td>3</td><td>3</td><td>核心状态和2～3个轻量指标</td></tr><tr><td><code>2x2</code></td><td>6</td><td>8</td><td>核心信息、辅助指标和少量操作</td></tr><tr><td><code>3x2</code></td><td>8</td><td>11</td><td>横向服务、快捷入口、媒体控制和图表</td></tr><tr><td><code>3x3</code></td><td>8</td><td>14</td><td>较完整数据、列表和多个操作</td></tr><tr><td><code>AUTO</code></td><td>8</td><td>12</td><td>根据内容自动决定</td></tr></tbody></table><p>TEXT、METRIC、STATUS、SWITCH、BUTTON 成本为1；PROGRESS 和 SLIDER 为2；LIST 为4。2×1 中的次级 PROGRESS 可降级为紧凑 METRIC，以保留信息而不是直接删除。</p></section>
+
+<section class="spec-section" id="normalize"><small>DETERMINISTIC RULES</small><h2>模型之后的确定性补齐</h2><table><thead><tr><th>输入语义</th><th>valueType</th><th>组件校正</th><th>Mock呈现</th></tr></thead><tbody><tr><td>temperature / 气温</td><td>NUMBER</td><td>METRIC</td><td>24°C</td></tr><tr><td>humidity / 湿度</td><td>PERCENTAGE</td><td>PROGRESS；2×1可降级METRIC</td><td>68%</td></tr><tr><td>battery / 电量</td><td>PERCENTAGE</td><td>PROGRESS</td><td>68%</td></tr><tr><td>weather.condition / 天气</td><td>ENUM</td><td>STATUS</td><td>晴</td></tr><tr><td>connection / 连接状态</td><td>ENUM</td><td>STATUS</td><td>已连接</td></tr></tbody></table><p>如果模型把多个 semanticKey 合并成一个逗号分隔字符串，规范化阶段会拆成独立 Morpheme，再分别执行类型校正和预算规划。</p></section>
+
+<section class="spec-section" id="examples"><small>PROMPT EXAMPLES</small><h2>推荐用户表达</h2><p><b>公式：</b>生成一张［主题］卡片，分别展示［数据］，提供［操作］，重点突出［核心内容］。</p><div class="doc-grid"><article><h3>天气</h3><p>生成一张上海天气卡片，分别展示今天的天气状况、气温和湿度，重点突出气温。</p></article><article><h3>设备</h3><p>生成一张耳机状态卡片，重点展示剩余电量，同时展示连接状态，并提供蓝牙开关。</p></article><article><h3>控制</h3><p>生成一张客厅灯光控制卡片，展示当前亮度和开关状态，提供灯光开关和亮度调节。</p></article><article><h3>任务</h3><p>生成一张今日待办卡片，列出今天的任务和完成状态，重点突出完成进度。</p></article></div></section>
+</main><link rel="stylesheet" href="/dark.css"><link rel="stylesheet" href="/diagrams.css"><script src="/morpheme-viz.js"></script></body></html>
