@@ -21,6 +21,16 @@ from .tokens import SIZES, style_tokens
 
 MIN_TEMPLATE_COVERAGE = 0.5
 
+# 自由布局的几何常识：每种组件的最小/舒适高度（px），格子低于最小值就不硬塞。
+_MIN_PX = {"PROGRESS": 70, "METRIC": 50, "STATUS": 34, "TEXT": 34, "SWITCH": 40,
+           "SLIDER": 40, "LIST": 58, "IMAGE": 44, "ICON": 32, "BUTTON": 36}
+_COMFORT_PX = {"METRIC": 58, "PROGRESS": 74}
+
+
+def _rows_needed(kind, row_px):
+    import math
+    return max(2, math.ceil(_MIN_PX.get(kind, 34) / row_px))
+
 
 def _style_block(style_id, domain, size):
     resolved_id, tokens = style_tokens(style_id, domain)
@@ -34,90 +44,137 @@ def _style_block(style_id, domain, size):
                                   "SLIDER": "track", "LIST": "rows"}}
 
 
-def _free_slots(morphemes, size):
-    rows = SIZES[size]["grid_rows"]
+def _free_slots(morphemes, size, reserved_top=0):
+    dims = SIZES[size]
+    rows = dims["grid_rows"]
+    row_px = (dims["h"] - 2 * dims["padding"]) / rows
     hero = max((m for m in morphemes if m["role"] in ("PRIMARY", "WARNING")),
                key=lambda m: m["priority"], default=None)
     actions = [m for m in morphemes if "ACTION" in m["role"]][:2]
     used = {id(hero)} | {id(m) for m in actions}
     details = [m for m in sorted(morphemes, key=lambda m: -m["priority"]) if id(m) not in used]
-    slots = []
+    slots, dropped = [], []
 
     if size == "2x1":
         if hero is not None and details:
-            slots.append({"id": "hero", "rect": {"x": 0, "y": 0, "w": 9, "h": 3}, "component": hero})
-            slots.append({"id": "detail1", "rect": {"x": 0, "y": 3, "w": 9, "h": 3}, "component": details[0]})
+            slots.append({"id": "hero", "rect": {"x": 0, "y": 0, "w": 9, "h": 3},
+                          "component": hero, "compact": True})
+            slots.append({"id": "detail1", "rect": {"x": 0, "y": 3, "w": 9, "h": 3},
+                          "component": details[0], "compact": True})
+            dropped.extend(details[1:])
         elif hero is not None:
-            slots.append({"id": "hero", "rect": {"x": 0, "y": 0, "w": 9, "h": rows}, "component": hero})
+            slots.append({"id": "hero", "rect": {"x": 0, "y": 0, "w": 9, "h": rows},
+                          "component": hero})
+            dropped.extend(details)
         if actions:
-            slots.append({"id": "action1", "rect": {"x": 9, "y": 1, "w": 3, "h": 4}, "component": actions[0]})
-        return slots, rows
+            slots.append({"id": "action1", "rect": {"x": 9, "y": 1, "w": 3, "h": 4},
+                          "component": actions[0]})
+            dropped.extend(actions[1:])
+        return slots, rows, dropped
 
-    action_rows = 3 if rows >= 12 else 2
-    body_rows = rows - (action_rows if actions else 0)
-    hero_rows = max(3, round(body_rows * (0.55 if not details else 0.45))) if hero is not None else 0
-    if hero is not None:
-        slots.append({"id": "hero", "rect": {"x": 0, "y": 0, "w": 12, "h": hero_rows}, "component": hero})
+    import math
+    action_rows = max(2, math.ceil(36 / row_px)) if actions else 0
+    body_rows = rows - action_rows
     columns = 2 if size == "2x2" else 3
-    grid_top, grid_rows_left = hero_rows, body_rows - hero_rows
-    laid, row_cursor, col_cursor = [], 0, 0
-    if details and grid_rows_left > 0:
-        # LIST items take a full row; small items share a row per column.
-        cells = []
-        for item in details:
-            span = columns if item["type"] == "LIST" else 1
-            cells.append((item, span))
-        needed_rows = 0
-        col = 0
-        for _, span in cells:
-            if span == columns:
-                needed_rows += 1 if col == 0 else 2
-                col = 0
+    col_width = 12 // columns
+    compact_rows = max(2, math.ceil(34 / row_px))
+
+    def _future_bands(queue):
+        count, index = 0, 0
+        while index < len(queue):
+            if queue[index]["type"] == "LIST":
+                index += 1
             else:
-                if col == 0:
-                    needed_rows += 1
-                col = (col + span) % columns
-        needed_rows = max(1, needed_rows)
-        row_height = max(2, grid_rows_left // needed_rows)
-        for item, span in cells:
-            if span == columns and col_cursor:
-                row_cursor, col_cursor = row_cursor + 1, 0
-            y = grid_top + row_cursor * row_height
-            if y + row_height > grid_top + grid_rows_left:
+                step = 0
+                while (index + step < len(queue) and step < columns
+                       and queue[index + step]["type"] != "LIST"):
+                    step += 1
+                index += step
+            count += 1
+        return count
+
+    def pack(hero_rows):
+        packed, lost = [], []
+        if hero is not None:
+            packed.append({"id": "hero",
+                           "rect": {"x": 0, "y": reserved_top, "w": 12, "h": hero_rows},
+                           "component": hero})
+        cursor, limit, queue, band_index = reserved_top + hero_rows, body_rows, list(details), 0
+        while queue:
+            if queue[0]["type"] == "LIST":
+                band = [queue.pop(0)]
+            else:
+                band = []
+                while queue and len(band) < columns and queue[0]["type"] != "LIST":
+                    band.append(queue.pop(0))
+            need = max(_rows_needed(m["type"], row_px) for m in band)
+            rest = _future_bands(queue)
+            # 前瞻预留：本带压缩能让后续带也放下时，优先保内容完整而非单带气派
+            if rest and cursor + need + compact_rows * rest > limit \
+                    and cursor + compact_rows * (rest + 1) <= limit:
+                need = compact_rows
+            if cursor + need > limit and cursor + compact_rows <= limit:
+                need = compact_rows  # 空间不足时压到紧凑高度，几何提示层会降级组件形态
+            if cursor + need > limit:
+                lost.extend(band + queue)
                 break
-            width = 12 if span == columns else 12 // columns
-            x = 0 if span == columns else col_cursor * (12 // columns)
-            height = row_height * (2 if span == columns and item["type"] == "LIST"
-                                   and grid_rows_left - row_cursor * row_height >= row_height * 2 else 1)
-            laid.append({"id": "detail%d" % (len(laid) + 1),
-                         "rect": {"x": x, "y": y, "w": width, "h": height}, "component": item})
-            if span == columns:
-                row_cursor += height // row_height
-                col_cursor = 0
-            else:
-                col_cursor += 1
-                if col_cursor >= columns:
-                    row_cursor, col_cursor = row_cursor + 1, 0
-    slots.extend(laid)
-    if actions:
-        width = 12 // len(actions)
-        for index, item in enumerate(actions):
-            slots.append({"id": "action%d" % (index + 1),
-                          "rect": {"x": index * width, "y": rows - action_rows, "w": width, "h": action_rows},
-                          "component": item})
-    return slots, rows
+            band_index += 1
+            for index, item in enumerate(band):
+                width = 12 if item["type"] == "LIST" else col_width
+                packed.append({"id": "detail%d_%d" % (band_index, index + 1),
+                               "rect": {"x": 0 if item["type"] == "LIST" else index * col_width,
+                                        "y": cursor, "w": width, "h": need},
+                               "component": item})
+            cursor += need
+        if actions:
+            width = 12 // len(actions)
+            for index, item in enumerate(actions):
+                packed.append({"id": "action%d" % (index + 1),
+                               "rect": {"x": index * width, "y": rows - action_rows,
+                                        "w": width, "h": action_rows},
+                               "component": item})
+        return packed, lost
+
+    hero_rows = 0
+    if hero is not None:
+        avail = body_rows - reserved_top
+        base = max(3, round(avail * (0.55 if not details else 0.45)))
+        hero_rows = min(avail, max(base, _rows_needed(hero["type"], row_px)))
+    slots, dropped = pack(hero_rows)
+    if dropped and hero is not None:
+        shrunk = max(compact_rows, _rows_needed(hero["type"], row_px))
+        if shrunk < hero_rows:
+            retry_slots, retry_dropped = pack(shrunk)
+            if len(retry_dropped) < len(dropped):
+                slots, dropped = retry_slots, retry_dropped
+    return slots, rows, dropped
 
 
 def _free_layout(spec, size):
-    slots, rows = _free_slots(spec["morphemes"], size)
-    placed_ids = {slot["component"]["id"] for slot in slots}
-    unplaced = [m["id"] for m in spec["morphemes"] if m["id"] not in placed_ids]
+    import math
+    dims = SIZES[size]
+    row_px = (dims["h"] - 2 * dims["padding"]) / dims["grid_rows"]
+    reserved_top = math.ceil(38 / row_px) if spec.get("title") and size != "2x1" else 0
+    slots, rows, dropped = _free_slots(spec["morphemes"], size, reserved_top)
+    title_suppressed = False
+    if dropped and reserved_top:
+        # 内容优先于标题栏：省略标题栏能救回语素时就省略
+        retry_slots, _, retry_dropped = _free_slots(spec["morphemes"], size, 0)
+        if len(retry_dropped) < len(dropped):
+            slots, dropped, title_suppressed = retry_slots, retry_dropped, True
     for slot in slots:
+        slot.setdefault("compact", False)
         slot.update({"match": "FREE", "sourceSlot": None})
+    rationale = ["无原型达到最低覆盖率；按 主视觉带→细节网格→底部操作条 层级式排布。"]
+    if title_suppressed:
+        rationale.append("空间不足，省略标题栏以保住内容语素。")
+    if dropped:
+        rationale.append("空间不足，按几何需求省略：" +
+                         "、".join(str(m.get("label") or m["id"]) for m in dropped))
     return {"templateId": "free_" + size, "templateName": "层级式自由布局", "source": "Free composition v2",
-            "mode": "FREE", "score": 0, "confidence": 0,
-            "grid": {"columns": 12, "rows": rows, "gap": 1}, "slots": slots, "unplaced": unplaced,
-            "rationale": ["无原型达到最低覆盖率；按 主视觉带→细节网格→底部操作条 层级式排布。"]}
+            "mode": "FREE", "score": 0, "confidence": 0, "titleSuppressed": title_suppressed,
+            "grid": {"columns": 12, "rows": rows, "gap": 1}, "slots": slots,
+            "unplaced": [m["id"] for m in dropped], "rationale": rationale}
 
 
 def _places_all_primaries(spec, assignment):
@@ -127,6 +184,28 @@ def _places_all_primaries(spec, assignment):
         if slot_index < 0 and spec["morphemes"][component_index]["role"] in ("PRIMARY", "WARNING"):
             return False
     return True
+
+
+def _apply_geometry_hints(result, size):
+    """Shared geometry pass for BOTH template and free slots: a ring in a short
+    slot degrades to a compact metric, cramped metrics/text get compact type
+    scale — content adapts to the cell instead of overflowing it."""
+    dims = SIZES[size]
+    rows = result["grid"]["rows"]
+    row_px = (dims["h"] - 2 * dims["padding"]) / rows
+    for slot in result["slots"]:
+        component = slot.get("component")
+        if component is None:
+            continue
+        px = slot["rect"]["h"] * row_px
+        if component["type"] == "PROGRESS" and px < 62:
+            slot["renderAs"] = "METRIC"
+        effective = slot.get("renderAs") or component["type"]
+        if effective == "METRIC" and px < 48:
+            slot["compact"] = True
+        elif effective in ("STATUS", "TEXT") and px < 32:
+            slot["compact"] = True
+    return result
 
 
 def plan(spec, style_id="auto", domain=None):
@@ -182,18 +261,29 @@ def plan(spec, style_id="auto", domain=None):
                                 "近优候选 %d 个；语义签名稳定选型。" % len(near)]
                   + (["额外语素放入模板留白。"] if added else [])}
         if unplaced:
-            result = _free_layout(spec, size)
+            # 分级处置：放不下的是用户要求的内容（高优先/主警示）才放弃模板；
+            # 只是低优先补充项（联想/变体/SUPPORTING）则按预算省略，保住原型命中。
+            by_id = {m["id"]: m for m in spec["morphemes"]}
+            important = [uid for uid in unplaced
+                         if by_id[uid]["priority"] >= 60
+                         or by_id[uid]["role"] in ("PRIMARY", "WARNING")]
+            if important:
+                result = _free_layout(spec, size)
+            else:
+                result["rationale"].append(
+                    "低优先补充项放不下，已省略：" +
+                    "、".join(str(by_id[uid].get("label") or uid) for uid in unplaced))
     result["style"] = _style_block(style_id, domain, size)
     result["alternatives"] = [{"templateId": item[2]["id"], "name": item[2]["name"],
                                "score": item[0], "coverage": round(item[1], 2)} for item in ranked[:3]]
-    return result
+    return _apply_geometry_hints(result, size)
 
 
 def render_spec(spec, layout):
     return {"version": "0.3", "title": spec.get("title"), "surface": spec["surface"],
             "template": layout["templateId"], "templateName": layout["templateName"],
             "layoutMode": layout["mode"], "grid": layout["grid"], "slots": layout["slots"],
-            "style": layout["style"],
+            "style": layout["style"], "titleSuppressed": layout.get("titleSuppressed", False),
             "diagnostics": {"score": layout["score"], "confidence": layout["confidence"],
                             "source": layout.get("source"), "rationale": layout["rationale"],
                             "unplaced": layout["unplaced"], "alternatives": layout["alternatives"]}}

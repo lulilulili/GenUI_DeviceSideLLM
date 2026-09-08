@@ -25,8 +25,12 @@ def _component_markup(item, slot, tokens):
     if item is None:
         glyph = {"ICON": "◐", "IMAGE": "▨", "CHART": "▁▃▅▇"}.get(slot.get("placeholder", "ICON"), "◐")
         return '<div class="chip ph">%s</div>' % glyph
-    kind = item["type"]
+    kind = slot.get("renderAs") or item["type"]
     content = item.get("content", {})
+    if kind == "METRIC" and item["type"] == "PROGRESS":
+        # 几何降级：短槽里的环形进度改为紧凑百分比数字
+        content = dict(content)
+        content.setdefault("unit", "%")
     raw_label = str(item.get("label") or "")
     presentation = item.get("presentation", {})
     show_label = presentation.get("showLabel", True) and raw_label
@@ -98,8 +102,14 @@ def _card_css(size, tokens):
 .gv2-card .chip{width:%(chip)spx;height:%(chip)spx;border-radius:50%%;background:%(chipbg)s;
   display:flex;align-items:center;justify-content:center;font-size:%(chipfs)spx;flex-shrink:0}
 .gv2-card .chip.ph{opacity:.85}
-.gv2-card section{min-width:0;min-height:0;display:flex;align-items:stretch}
+.gv2-card section{min-width:0;min-height:0;display:flex;align-items:stretch;overflow:hidden}
 .gv2-card section>*{width:100%%}
+.gv2-card section.compact .hero{font-size:20px;letter-spacing:0}
+.gv2-card section.compact .hero i{font-size:11px}
+.gv2-card section.compact .lbl{font-size:10.5px}
+.gv2-card section.compact .status b{font-size:13px;-webkit-line-clamp:1}
+.gv2-card section.compact .ring{width:38px;height:38px}
+.gv2-card section.compact .ring b{font-size:11px}
 .gv2-card .lbl{display:block;font-size:%(label)spx;font-weight:500;color:%(support)s;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .gv2-card .metric{display:flex;flex-direction:column;justify-content:center;gap:2px}
@@ -167,18 +177,18 @@ def render_html(spec):
     for item in spec["slots"]:
         rect = item["rect"]
         markup = _component_markup(item.get("component"), item, tokens)
-        sections.append('<section style="grid-column:%d/span %d;grid-row:%d/span %d">%s</section>'
-                        % (rect["x"] + 1, rect["w"], rect["y"] + 1, rect["h"], markup))
+        cls = ' class="compact"' if item.get("compact") else ""
+        sections.append('<section%s style="grid-column:%d/span %d;grid-row:%d/span %d">%s</section>'
+                        % (cls, rect["x"] + 1, rect["w"], rect["y"] + 1, rect["h"], markup))
     show_titlebar = (bool(spec.get("title")) and size != "2x1"
-                     and spec.get("layoutMode") == "FREE")
+                     and spec.get("layoutMode") == "FREE"
+                     and not spec.get("titleSuppressed"))
     titlebar = ('<div class="titlebar"><span class="t">%s</span><span class="chip">%s</span></div>'
                 % (escape(spec["title"]), title_glyph)) if show_titlebar else ""
     card_class = "gv2-card with-title" if show_titlebar else "gv2-card"
     html = ('<div class="%s" data-template="%s" data-size="%s">%s<div class="grid">%s</div></div>'
             % (card_class, escape(spec["template"]), escape(size), titlebar, "".join(sections)))
-    css = _card_css(size, tokens) + (
-        ".gv2-card.with-title .grid{height:calc(100%% - %(off)dpx);margin-top:%(off)dpx}"
-        % {"off": SPACING["chip_small"] + 6})
+    css = _card_css(size, tokens)
     return {"protocol": "html_css", "files": {"card.html": html, "card.css": css},
             "standalone": "<style>%s</style>%s" % (css, html)}
 
