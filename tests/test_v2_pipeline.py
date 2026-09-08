@@ -7,6 +7,81 @@ from genui_v2.derive import derive_component
 from genui_v2.protocol import validate_draft, normalize_draft
 from genui_v2.elision import plan_label_visibility
 from genui_v2.refine import apply_miss_policy, coalesce, enrich
+from genui_v2.variants import apply_variant
+from genui_v2.ux_budget import apply_ux_budget
+
+
+class VariantTests(unittest.TestCase):
+    def _primary(self, key):
+        return {"id": "m1", "role": "PRIMARY", "priority": 90, "label": "x",
+                "semanticKey": key, "valueType": "PERCENTAGE", "content": {},
+                "presentation": {},
+                "binding": {"resolution": "EXACT", "key": key, "providerId": "app.weather"}}
+
+    def test_humidity_focus_adds_curated_secondaries(self):
+        spec = {"title": None, "surface": {"type": "CARD", "size": "2x2"},
+                "morphemes": [self._primary("weather.humidity")]}
+        spec, variant_id, notes = apply_variant(spec, "WEATHER")
+        self.assertEqual(variant_id, "weather.focus.humidity")
+        keys = {(m.get("binding") or {}).get("key") for m in spec["morphemes"]}
+        self.assertIn("weather.temperature", keys)
+        added = [m for m in spec["morphemes"] if m["id"].startswith("v")]
+        self.assertTrue(all(m["priority"] == 35 and m["role"] == "SUPPORTING" for m in added))
+
+    def test_no_variant_for_unknown_primary(self):
+        spec = {"title": None, "surface": {"type": "CARD", "size": "2x2"},
+                "morphemes": [self._primary("weather.city")]}
+        spec, variant_id, notes = apply_variant(spec, "WEATHER")
+        self.assertIsNone(variant_id)
+        self.assertEqual(len(spec["morphemes"]), 1)
+
+    def test_existing_keys_not_duplicated(self):
+        spec = {"title": None, "surface": {"type": "CARD", "size": "2x2"},
+                "morphemes": [self._primary("weather.humidity"),
+                              {"id": "m2", "role": "SECONDARY", "priority": 60, "label": "温度",
+                               "semanticKey": "weather.temperature", "valueType": "NUMBER",
+                               "content": {}, "presentation": {},
+                               "binding": {"resolution": "EXACT", "key": "weather.temperature",
+                                           "providerId": "app.weather"}}]}
+        spec, variant_id, _ = apply_variant(spec, "WEATHER")
+        temps = [m for m in spec["morphemes"]
+                 if (m.get("binding") or {}).get("key") == "weather.temperature"]
+        self.assertEqual(len(temps), 1)
+        self.assertEqual(temps[0]["priority"], 60)  # 用户请求的字段原样保留
+
+
+class UxBudgetTests(unittest.TestCase):
+    def _m(self, mid, role, kind="TEXT", items=None):
+        return {"id": mid, "role": role, "priority": 50, "label": mid, "type": kind,
+                "semanticKey": "k", "valueType": "STRING",
+                "content": {"items": items} if items is not None else {}, "presentation": {}}
+
+    def test_third_level_dropped_on_small_card(self):
+        spec = {"surface": {"size": "2x2"}, "morphemes": [
+            self._m("m1", "PRIMARY"), self._m("m2", "SECONDARY"), self._m("m3", "SUPPORTING")]}
+        spec, notes = apply_ux_budget(spec)
+        self.assertEqual([m["id"] for m in spec["morphemes"]], ["m1", "m2"])
+        self.assertTrue(notes)
+
+    def test_list_rows_clamped_but_chips_untouched(self):
+        rows = [{"title": str(i)} for i in range(6)]
+        chips = {"id": "g", "role": "PRIMARY_ACTION", "priority": 85, "label": "g",
+                 "type": "LIST", "semanticKey": "k", "valueType": "LIST",
+                 "content": {"items": list(rows)}, "presentation": {"variant": "chips"}}
+        spec = {"surface": {"size": "2x2"}, "morphemes": [
+            self._m("m1", "PRIMARY", "LIST", items=list(rows)), chips]}
+        spec, notes = apply_ux_budget(spec)
+        self.assertEqual(len(spec["morphemes"][0]["content"]["items"]), 2)
+        self.assertEqual(len(chips["content"]["items"]), 6)
+
+    def test_features_off_equals_legacy_flow(self):
+        from genui_v2 import PipelineV2, MockProviderV2
+        result = PipelineV2(MockProviderV2(), features={"variants": False, "ux_budget": False}) \
+            .generate("显示耳机电量、连接状态和蓝牙开关", "2x2")
+        # 关闭适配层后：无变体标记、无变体语素，联想与旧行为一致（补网络状态后被布局回退剔除）
+        self.assertIsNone(result["businessVariant"])
+        self.assertFalse(any(m["id"].startswith("v") for m in result["morphemeSpec"]["morphemes"]))
+        self.assertEqual(result["layout"]["templateId"], "2x2_gauge_action")
 
 
 class RefineTests(unittest.TestCase):

@@ -124,7 +124,7 @@ def _card_css(size, tokens):
 .gv2-card .slider::after{content:'';position:absolute;left:0;top:0;bottom:0;width:calc(var(--p)*1%%);
   border-radius:3px;background:%(accent)s}
 .gv2-card .progress{display:flex;flex-direction:column;align-items:flex-start;gap:4px;justify-content:center}
-.gv2-card .ring{width:56px;height:56px;border-radius:50%%;display:flex;align-items:center;justify-content:center;
+.gv2-card .ring{width:%(ring)spx;height:%(ring)spx;border-radius:50%%;display:flex;align-items:center;justify-content:center;
   background:conic-gradient(%(accent)s calc(var(--p)*1%%),%(chipbg)s 0);position:relative}
 .gv2-card .ring::before{content:'';position:absolute;inset:6px;border-radius:50%%;background:%(bgflat)s}
 .gv2-card .ring b{position:relative;font-size:15px;font-weight:700}
@@ -149,7 +149,8 @@ def _card_css(size, tokens):
        "fg": tokens["fg"], "support": tokens["support"], "accent": tokens["accent"],
        "chipbg": tokens["chip"], "chip": SPACING["chip_small"], "chipfs": 15,
        "pillbg": tokens["pillBg"], "pillfg": tokens["pillFg"],
-       "pillh": SPACING["pill_h"], "pillr": SPACING["pill_h"] // 2, "shadow": shadow,
+       "pillh": SPACING["pill_h"], "pillr": SPACING["pill_h"] // 2, "ring": SPACING["ring"],
+       "shadow": shadow,
        "title": TYPE["title"]["size"], "label": TYPE["label"]["size"], "body": TYPE["body"]["size"],
        "hero": TYPE["hero"]["size"], "herounit": TYPE["hero_unit"]["size"],
        "metric": TYPE["metric"]["size"], "btn": TYPE["button"]["size"], "listfs": TYPE["list"]["size"]}

@@ -12,6 +12,11 @@ from .capability import bind, keys_for_domain
 from .derive import apply as derive_components
 from .elision import plan_label_visibility
 from .refine import apply_miss_policy, coalesce, enrich
+from .ux_budget import apply_ux_budget
+from .variants import apply_variant
+
+# 可插拔适配层开关（借鉴 CreateMyCard 的部分）。全部 False 时链路与引入前逐字节一致。
+DEFAULT_FEATURES = {"variants": True, "ux_budget": True}
 from .layout import plan as plan_layout, render_spec as build_render_spec
 from .render import render_all
 from .router import route
@@ -22,8 +27,11 @@ class GenerationError(RuntimeError):
 
 
 class PipelineV2:
-    def __init__(self, provider, on_event=None):
+    def __init__(self, provider, on_event=None, features=None):
         self.provider, self.on_event = provider, on_event
+        self.features = dict(DEFAULT_FEATURES)
+        if features:
+            self.features.update(features)
 
     def generate(self, user_prompt, card_size="AUTO", style_id="auto"):
         if card_size not in ("AUTO", "2x1", "2x2", "3x2", "3x3"):
@@ -74,15 +82,37 @@ class PipelineV2:
         with trace.stage("miss_policy", spec) as event:
             spec, miss_notes = apply_miss_policy(spec)
             event["output"] = {"notes": miss_notes}
+        variant_id, variant_notes = None, []
+        with trace.stage("business_variant", spec) as event:
+            if self.features.get("variants"):
+                spec, variant_id, variant_notes = apply_variant(spec, domain)
+                event["output"] = {"variant": variant_id, "notes": variant_notes}
+            else:
+                event["output"] = {"skipped": True}
         with trace.stage("derive_components", spec) as event:
             spec, decisions = derive_components(spec)
             event["output"] = {"spec": spec, "decisions": decisions}
         with trace.stage("enrich", spec) as event:
-            spec, enrich_notes = enrich(spec, domain)
-            event["output"] = {"notes": enrich_notes, "resolvedSize": spec["surface"]["size"]}
+            if variant_id is not None:
+                # 变体是策划过的联想，命中后泛化联想让位
+                enrich_notes = []
+                if spec["surface"]["size"] == "AUTO":
+                    spec["surface"]["size"] = protocol.resolve_auto_size(spec)
+                event["output"] = {"skipped": "variant matched",
+                                   "resolvedSize": spec["surface"]["size"]}
+            else:
+                spec, enrich_notes = enrich(spec, domain)
+                event["output"] = {"notes": enrich_notes, "resolvedSize": spec["surface"]["size"]}
         with trace.stage("coalesce", spec) as event:
             spec, coalesce_notes = coalesce(spec)
             event["output"] = {"notes": coalesce_notes}
+        ux_notes = []
+        with trace.stage("ux_budget", spec) as event:
+            if self.features.get("ux_budget"):
+                spec, ux_notes = apply_ux_budget(spec)
+                event["output"] = {"notes": ux_notes}
+            else:
+                event["output"] = {"skipped": True}
         with trace.stage("budget", spec) as event:
             spec, budget = protocol.apply_information_budget(spec, spec["surface"]["size"])
             event["output"] = {"spec": spec, "budget": budget}
@@ -111,7 +141,8 @@ class PipelineV2:
             event["output"] = {"outputs": {"html_css": {"files": list(outputs["html_css"]["files"])},
                                            "a2ui": "…", "dsl": "…"}}
         result = {"domain": domain, "draft": draft, "roleCorrections": role_corrections,
-                  "flowNotes": miss_notes + enrich_notes + coalesce_notes,
+                  "businessVariant": variant_id, "features": self.features,
+                  "flowNotes": miss_notes + variant_notes + enrich_notes + coalesce_notes + ux_notes,
                   "labelDecisions": label_decisions, "morphemeSpec": spec,
                   "bindReport": bind_report, "componentDecisions": decisions,
                   "budget": budget, "layout": layout, "renderSpec": spec_out,

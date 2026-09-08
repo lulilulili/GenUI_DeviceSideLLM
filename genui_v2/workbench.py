@@ -185,6 +185,7 @@ class Handler(BaseHTTPRequestHandler):
                 client = create_provider(settings)
             card_size = body.get("card_size", "AUTO")
             style_id = body.get("style_id", "auto")
+            features = body.get("features") if isinstance(body.get("features"), dict) else None
         except Exception as exc:
             self.send_error(400, str(exc).encode("ascii", "replace").decode())
             return
@@ -204,7 +205,7 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.flush()
 
         try:
-            PipelineV2(client, on_event=send).generate(prompt, card_size, style_id)
+            PipelineV2(client, on_event=send, features=features).generate(prompt, card_size, style_id)
             send({"type": "done", "ok": True})
         except (BrokenPipeError, ConnectionResetError):
             return

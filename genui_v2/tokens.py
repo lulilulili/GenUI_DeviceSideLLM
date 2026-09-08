@@ -31,7 +31,7 @@ TYPE = {
     "list": {"size": 12.5, "weight": 400},
 }
 
-SPACING = {"gap": 8, "row_gap": 6, "chip": 40, "chip_small": 32, "pill_h": 34}
+SPACING = {"gap": 8, "row_gap": 6, "chip": 40, "chip_small": 32, "pill_h": 36, "ring": 52}
 
 # Style presets sampled from the PDF example cards.
 # fg tones: content = primary text, support = secondary text.

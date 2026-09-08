@@ -169,6 +169,11 @@ padding:2px 4px;overflow:hidden;white-space:nowrap}
       <option value="teal">teal 舒缓青</option>
       <option value="orange">orange 活力橙</option>
     </select>
+    <label style="margin-top:10px">适配层（借鉴 CreateMyCard，可独立关闭）</label>
+    <label style="margin:4px 0"><input type="checkbox" id="featVariants" checked style="width:auto;vertical-align:-2px">
+      业务变体层（主焦点切换 + curated 辅助字段）</label>
+    <label style="margin:4px 0"><input type="checkbox" id="featUxBudget" checked style="width:auto;vertical-align:-2px">
+      信息层级预算（每尺寸限层级数/列表行数）</label>
     <button class="run" id="runBtn">▶ 生成</button>
     <div class="hint" id="status"></div>
   </div>
@@ -411,7 +416,8 @@ async function run(){
   ["resultCard","codeCard","usageCard"].forEach(id=>$(id).style.display="none");
   $("status").textContent="运行中…"; $("status").className="hint";
   const body={prompt:$("prompt").value, provider:$("provider").value, base_url:$("baseUrl").value,
-    model:$("model").value, api_key:$("apiKey").value, card_size:$("size").value, style_id:$("style").value};
+    model:$("model").value, api_key:$("apiKey").value, card_size:$("size").value, style_id:$("style").value,
+    features:{variants:$("featVariants").checked, ux_budget:$("featUxBudget").checked}};
   try{
     const res=await fetch("/api/run",{method:"POST",headers:{"Content-Type":"application/json","X-Workbench-Token":TOKEN},
       body:JSON.stringify(body)});
