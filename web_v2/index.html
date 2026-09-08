@@ -510,10 +510,11 @@ function renderResult(out){
       "</td><td>"+pathOrAction+"</td></tr>");
   });
   const corr=out.roleCorrections||[];
-  $("corrections").innerHTML=corr.length?corr.map(c=>
+  const flow=(out.flowNotes||[]).map(n=>"<div class='correction'>⚙ "+n+"</div>").join("");
+  $("corrections").innerHTML=(corr.length?corr.map(c=>
     "<div class='correction'>⚙ 角色规范化："+(c.label||("m"+(c.index+1)))+" "+c.from+" → "+c.to+
     "（"+({MULTI_PRIMARY:"PRIMARY 只保留优先一条",NO_PRIMARY:"缺少主信息，自动提升",ACTION_LIMIT:"动作超过 2 个"}[c.reason]||c.reason)+
-    "，未消耗模型重试）</div>").join(""):"";
+    "，未消耗模型重试）</div>").join(""):"")+flow;
   $("budgetNote").textContent=out.budget?("信息预算："+out.budget.used+"/"+out.budget.capacity+
     (out.budget.dropped.length?(" · 降级丢弃 "+out.budget.dropped.map(d=>d.label).join("、")):" · 无降级")):"";
   renderUsage();
@@ -656,12 +657,13 @@ async function showLabResult(test,result){
   frame.srcdoc="<body style='margin:4px;background:transparent'>"+result.code+"</body>";
   const l=result.layout, isFree=l.mode==="FREE";
   const hiddenLabels=(result.labelDecisions||[]).filter(d=>!d.show).map(d=>d.label);
+  const coalesceNote=(result.coalesceNotes||[]).map(n=>"<br><span style='color:var(--warn)'>⚙ "+n+"</span>").join("");
   $("labMeta").innerHTML=
     `<span class='tag ${isFree?"free":"tpl"}'>${isFree?"自由布局":"模板命中"}</span>`+
     `<b>${l.templateName}</b> <span style='color:var(--dim)'>(${l.templateId})</span><br>`+
     `来源：${l.source||"—"} · 覆盖率 ${(l.confidence*100).toFixed(0)}%`+
     (l.alternatives&&l.alternatives.length?`<br>候选：${l.alternatives.map(a=>a.templateId+"("+(a.coverage*100).toFixed(0)+"%)").join(" / ")}`:"")+
-    (hiddenLabels.length?`<br>标签消隐：${hiddenLabels.join("、")}`:"")+
+    (hiddenLabels.length?`<br>标签消隐：${hiddenLabels.join("、")}`:"")+coalesceNote+
     (l.unplaced.length?`<br><span class='err'>未放置：${l.unplaced.join(",")}</span>`:"");
   if(!tplData) tplData=await (await fetch("/api/templates")).json();
   const slots=l.slots.map(s=>({id:(s.component?s.component.type:(s.placeholder||"")),

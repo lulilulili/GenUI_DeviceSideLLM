@@ -6,6 +6,61 @@ from genui_v2.capability import resolve
 from genui_v2.derive import derive_component
 from genui_v2.protocol import validate_draft, normalize_draft
 from genui_v2.elision import plan_label_visibility
+from genui_v2.refine import apply_miss_policy, coalesce, enrich
+
+
+class RefineTests(unittest.TestCase):
+    def _m(self, mid, kind, label, role, resolution="EXACT", priority=None, key=None):
+        from genui_v2.protocol import ROLE_PRIORITY
+        return {"id": mid, "type": kind, "label": label, "role": role,
+                "priority": priority if priority is not None else ROLE_PRIORITY[role],
+                "semanticKey": key or "x." + mid, "valueType": "STRING",
+                "content": {}, "presentation": {},
+                "binding": {"resolution": resolution}, "actionKey": None}
+
+    def _spec(self, size, morphemes):
+        return {"title": "t", "surface": {"type": "CARD", "size": size}, "morphemes": morphemes}
+
+    def test_unbound_action_dropped_but_info_kept(self):
+        spec = self._spec("2x2", [
+            self._m("m1", "TEXT", "主信息", "PRIMARY", "MISS"),
+            self._m("m2", "BUTTON", "神秘操作", "PRIMARY_ACTION", "MISS"),
+            self._m("m3", "TEXT", "凑数", "SUPPORTING", "MISS")])
+        spec, notes = apply_miss_policy(spec)
+        ids = [m["id"] for m in spec["morphemes"]]
+        self.assertEqual(ids, ["m1"])
+        self.assertEqual(len(notes), 2)
+
+    def test_enrich_fills_from_same_provider(self):
+        spec = self._spec("2x2", [{
+            "id": "m1", "type": "PROGRESS", "label": "电量", "role": "PRIMARY",
+            "priority": 90, "semanticKey": "phone.battery.level", "valueType": "PERCENTAGE",
+            "content": {"value": 67}, "presentation": {},
+            "binding": {"resolution": "EXACT", "key": "phone.battery.level",
+                        "providerId": "system.battery"}, "actionKey": None}])
+        spec, notes = enrich(spec, "DEVICE")
+        enriched = [m for m in spec["morphemes"] if m.get("presentation", {}).get("enriched")]
+        self.assertTrue(enriched, "should add sibling battery entries")
+        self.assertTrue(all(m["priority"] < 30 for m in enriched))
+        self.assertTrue(all(m["valueType"] not in ("BOOLEAN",) for m in enriched))
+
+    def test_ten_buttons_coalesce_to_chip_row(self):
+        buttons = [self._m("m%d" % i, "BUTTON", "操作%d" % i, "PRIMARY_ACTION") for i in range(10)]
+        spec = self._spec("2x2", [self._m("t1", "TEXT", "标题", "PRIMARY")] + buttons)
+        spec, notes = coalesce(spec)
+        kinds = [m["type"] for m in spec["morphemes"]]
+        self.assertNotIn("BUTTON", kinds)
+        group = next(m for m in spec["morphemes"] if m["id"] == "g_actions")
+        self.assertEqual(group["presentation"]["variant"], "chips")
+        self.assertEqual(len(group["content"]["items"]), 10)
+        self.assertTrue(notes)
+
+    def test_few_buttons_untouched(self):
+        spec = self._spec("2x2", [self._m("t1", "TEXT", "标题", "PRIMARY"),
+                                  self._m("b1", "BUTTON", "操作", "PRIMARY_ACTION")])
+        spec, notes = coalesce(spec)
+        self.assertIn("BUTTON", [m["type"] for m in spec["morphemes"]])
+        self.assertEqual(notes, [])
 
 
 class ElisionTests(unittest.TestCase):

@@ -218,7 +218,14 @@ def bind(spec, domain=None):
     report = []
     for item in spec["morphemes"]:
         entry, how = resolve(item["semanticKey"], item["label"], domain)
+        cross_domain = False
+        if entry is None and domain is not None:
+            # 跨域营救：路由领域内 MISS 时放开领域约束再试一次
+            entry, how = resolve(item["semanticKey"], item["label"], None)
+            cross_domain = entry is not None
         binding = {"resolution": how}
+        if cross_domain:
+            binding["crossDomain"] = True
         if entry is not None:
             binding.update({"key": entry["key"], "providerId": entry["providerId"],
                             "path": entry.get("path"), "permission": entry.get("permission"),

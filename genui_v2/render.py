@@ -66,6 +66,10 @@ def _component_markup(item, slot, tokens):
         return ('<div class="pill"%s><span class="pilligo">%s</span><span>%s</span></div>'
                 % (unbound, glyph, escape(str(content.get("text") or item.get("label") or "执行"))))
     if kind == "LIST":
+        if presentation.get("variant") == "chips":
+            chips = "".join('<span class="chipbtn">%s</span>' % escape(str(row.get("title", "")))
+                            for row in content.get("items", [])[:10])
+            return '<div class="chiprow"%s>%s</div>' % (attrs, chips or "")
         rows = "".join('<li><i class="dot"></i>%s</li>' % escape(str(row.get("title", "")))
                        for row in content.get("items", [])[:4])
         return '<div class="listbox"%s>%s<ul class="list">%s</ul></div>' % (attrs, label, rows or "<li>暂无内容</li>")
@@ -126,6 +130,11 @@ def _card_css(size, tokens):
 .gv2-card .ring b{position:relative;font-size:15px;font-weight:700}
 .gv2-card .ring b i{font-style:normal;font-size:10px;font-weight:500;color:%(support)s}
 .gv2-card .listbox{display:flex;flex-direction:column;justify-content:center;gap:4px;height:100%%}
+.gv2-card .chiprow{display:flex;gap:6px;align-items:center;height:100%%;overflow-x:auto;
+  scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.gv2-card .chiprow::-webkit-scrollbar{display:none}
+.gv2-card .chipbtn{flex-shrink:0;height:28px;line-height:28px;padding:0 13px;border-radius:14px;
+  background:%(pillbg)s;color:%(pillfg)s;font-size:12px;font-weight:500;white-space:nowrap}
 .gv2-card .media{width:100%%;height:100%%;border-radius:12px;background:%(chipbg)s;display:flex;
   flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:20px;opacity:.9}
 .gv2-card .media span{font-size:10px;color:%(support)s}

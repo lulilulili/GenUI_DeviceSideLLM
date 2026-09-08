@@ -11,6 +11,7 @@ from . import protocol
 from .capability import bind, keys_for_domain
 from .derive import apply as derive_components
 from .elision import plan_label_visibility
+from .refine import apply_miss_policy, coalesce, enrich
 from .layout import plan as plan_layout, render_spec as build_render_spec
 from .render import render_all
 from .router import route
@@ -70,18 +71,37 @@ class PipelineV2:
         with trace.stage("capability_bind", spec) as event:
             spec, bind_report = bind(spec, domain)
             event["output"] = {"spec": spec, "report": bind_report}
+        with trace.stage("miss_policy", spec) as event:
+            spec, miss_notes = apply_miss_policy(spec)
+            event["output"] = {"notes": miss_notes}
         with trace.stage("derive_components", spec) as event:
             spec, decisions = derive_components(spec)
             event["output"] = {"spec": spec, "decisions": decisions}
+        with trace.stage("enrich", spec) as event:
+            spec, enrich_notes = enrich(spec, domain)
+            event["output"] = {"notes": enrich_notes, "resolvedSize": spec["surface"]["size"]}
+        with trace.stage("coalesce", spec) as event:
+            spec, coalesce_notes = coalesce(spec)
+            event["output"] = {"notes": coalesce_notes}
         with trace.stage("budget", spec) as event:
-            size = card_size if card_size != "AUTO" else protocol.resolve_auto_size(spec)
-            spec, budget = protocol.apply_information_budget(spec, size)
+            spec, budget = protocol.apply_information_budget(spec, spec["surface"]["size"])
             event["output"] = {"spec": spec, "budget": budget}
         with trace.stage("label_elision", spec) as event:
             spec, label_decisions = plan_label_visibility(spec)
             event["output"] = {"decisions": label_decisions}
         with trace.stage("layout", {"size": spec["surface"]["size"], "style": style_id}) as event:
             layout = plan_layout(spec, style_id, domain)
+            if layout["mode"] == "FREE":
+                # 联想补充不得以牺牲模板命中为代价：剔除 enriched 语素重试一次
+                core = [m for m in spec["morphemes"]
+                        if not m.get("presentation", {}).get("enriched")]
+                if len(core) < len(spec["morphemes"]):
+                    trimmed = dict(spec)
+                    trimmed["morphemes"] = core
+                    retry = plan_layout(trimmed, style_id, domain)
+                    if retry["mode"] != "FREE":
+                        spec, layout = trimmed, retry
+                        enrich_notes.append("联想补充导致模板未命中，已回退补充项以保住原型布局")
             event["output"] = layout
         with trace.stage("render_spec", layout) as event:
             spec_out = build_render_spec(spec, layout)
@@ -91,6 +111,7 @@ class PipelineV2:
             event["output"] = {"outputs": {"html_css": {"files": list(outputs["html_css"]["files"])},
                                            "a2ui": "…", "dsl": "…"}}
         result = {"domain": domain, "draft": draft, "roleCorrections": role_corrections,
+                  "flowNotes": miss_notes + enrich_notes + coalesce_notes,
                   "labelDecisions": label_decisions, "morphemeSpec": spec,
                   "bindReport": bind_report, "componentDecisions": decisions,
                   "budget": budget, "layout": layout, "renderSpec": spec_out,

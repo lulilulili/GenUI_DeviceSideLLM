@@ -12,6 +12,7 @@ from . import protocol
 from .capability import PROVIDERS
 from .elision import plan_label_visibility
 from .layout import plan as plan_layout, render_spec as build_render_spec
+from .refine import coalesce
 from .render import render_all
 from .pipeline import PipelineV2, MockProviderV2
 from .tokens import SIZES, STYLES
@@ -78,11 +79,13 @@ def run_layout_test(body):
             "valueType": value_type, "content": content, "presentation": {}})
     spec = {"version": "0.3", "scene": "layout_lab", "title": str(body.get("title") or "")[:40] or None,
             "surface": {"type": "CARD", "size": size, "density": "AUTO"}, "morphemes": morphemes}
+    spec, coalesce_notes = coalesce(spec)
     spec, label_decisions = plan_label_visibility(spec)
     layout = plan_layout(spec, body.get("style_id", "light"), None)
     rendered_spec = build_render_spec(spec, layout)
     outputs = render_all(rendered_spec)
-    return {"morphemeSpec": spec, "labelDecisions": label_decisions, "layout": layout,
+    return {"morphemeSpec": spec, "labelDecisions": label_decisions,
+            "coalesceNotes": coalesce_notes, "layout": layout,
             "renderSpec": rendered_spec, "outputs": outputs,
             "code": outputs["html_css"]["standalone"]}
 
