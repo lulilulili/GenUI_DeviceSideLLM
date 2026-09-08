@@ -1,5 +1,24 @@
 # GenUI 端侧 Morpheme 工作台
 
+## v2（推荐入口）
+
+`genui_v2/` 是按"模型只出语义、代码拥有一切 UI 决策"重构后的完整管线：
+单次 LLM 调用产出 4 字段语素草稿 → 确定性组件推导 → 声明式能力注册表绑定（替代 mock 数据）
+→ PDF 原型评分匹配 / 层级式自由布局 → 设计令牌保真渲染（HTML/A2UI/DSL）。
+方案与成本分析见 `docs/V2-全端侧方案设计.md`。
+
+```powershell
+# v2 工作台（全链路可观测 + 卡片预览）
+python -m genui_v2.workbench   # http://127.0.0.1:8766
+
+# v2 测试
+python -m unittest tests.test_v2_pipeline -v
+```
+
+旧版 `genui_intent/`（v1，双协议 + 规则后处理）完整保留用于对比，以下为 v1 原说明。
+
+---
+
 当前已增加完整的 Demo 生成链路：
 
 ```text
