@@ -69,6 +69,10 @@ def _component_markup(item, slot, tokens):
         rows = "".join('<li><i class="dot"></i>%s</li>' % escape(str(row.get("title", "")))
                        for row in content.get("items", [])[:4])
         return '<div class="listbox"%s>%s<ul class="list">%s</ul></div>' % (attrs, label, rows or "<li>暂无内容</li>")
+    if kind == "IMAGE":
+        return '<div class="media"%s>▨<span>%s</span></div>' % (attrs, escape(raw_label) if show_label else "")
+    if kind == "ICON":
+        return '<div class="chip"%s>%s</div>' % (attrs, icon_for(item.get("semanticKey"), raw_label))
     return ('<div class="text"%s>%s<p>%s</p></div>'
             % (attrs, label, escape(str(content.get("text") or item.get("label") or ""))))
 
@@ -122,6 +126,9 @@ def _card_css(size, tokens):
 .gv2-card .ring b{position:relative;font-size:15px;font-weight:700}
 .gv2-card .ring b i{font-style:normal;font-size:10px;font-weight:500;color:%(support)s}
 .gv2-card .listbox{display:flex;flex-direction:column;justify-content:center;gap:4px;height:100%%}
+.gv2-card .media{width:100%%;height:100%%;border-radius:12px;background:%(chipbg)s;display:flex;
+  flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:20px;opacity:.9}
+.gv2-card .media span{font-size:10px;color:%(support)s}
 .gv2-card .list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;justify-content:center;gap:5px}
 .gv2-card .list li{font-size:%(listfs)spx;display:flex;align-items:center;gap:6px;white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis}

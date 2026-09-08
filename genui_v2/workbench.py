@@ -10,8 +10,81 @@ from genui_intent.providers import create_provider
 from genui_intent.layout_engine import TEMPLATES
 from . import protocol
 from .capability import PROVIDERS
+from .elision import plan_label_visibility
+from .layout import plan as plan_layout, render_spec as build_render_spec
+from .render import render_all
 from .pipeline import PipelineV2, MockProviderV2
 from .tokens import SIZES, STYLES
+
+_LAB_TYPES = {"TEXT", "METRIC", "STATUS", "PROGRESS", "SWITCH", "SLIDER",
+              "BUTTON", "LIST", "IMAGE", "ICON"}
+_LAB_DEFAULT_VT = {"TEXT": "STRING", "METRIC": "NUMBER", "STATUS": "ENUM",
+                   "PROGRESS": "PERCENTAGE", "SWITCH": "BOOLEAN", "SLIDER": "PERCENTAGE",
+                   "BUTTON": "UNKNOWN", "LIST": "LIST", "IMAGE": "UNKNOWN", "ICON": "UNKNOWN"}
+
+
+def _lab_content(kind, label, value):
+    """Deterministic preview content for builder morphemes (no capability bind)."""
+    if kind == "METRIC":
+        return {"value": value if value not in (None, "") else 99, "unit": ""}
+    if kind == "PROGRESS":
+        try:
+            return {"value": float(value), "min": 0, "max": 100, "unit": "%", "showValue": True}
+        except (TypeError, ValueError):
+            return {"value": 68, "min": 0, "max": 100, "unit": "%", "showValue": True}
+    if kind == "STATUS":
+        return {"text": value or "状态正常", "state": "SUCCESS"}
+    if kind == "SWITCH":
+        return {"checked": True, "disabled": False}
+    if kind == "SLIDER":
+        return {"value": 60, "min": 0, "max": 100, "step": 1, "unit": "%"}
+    if kind == "BUTTON":
+        return {"text": value or label or "执行", "variant": "PRIMARY", "disabled": False}
+    if kind == "LIST":
+        return {"items": [{"title": "列表内容 1"}, {"title": "列表内容 2"}, {"title": "列表内容 3"}]}
+    if kind in ("IMAGE", "ICON"):
+        return {}
+    return {"text": value or label or "示例内容", "maxLines": 3}
+
+
+def run_layout_test(body):
+    """/api/layout-test: deterministic morphemes -> elision -> layout -> render."""
+    size = body.get("size")
+    if size not in ("2x1", "2x2", "3x2", "3x3"):
+        raise ValueError("size 必须为 2x1/2x2/3x2/3x3")
+    raw = body.get("morphemes")
+    if not isinstance(raw, list) or not 0 < len(raw) <= 20:
+        raise ValueError("morphemes 必须为 1-20 项")
+    morphemes = []
+    for index, item in enumerate(raw):
+        if not isinstance(item, dict) or item.get("type") not in _LAB_TYPES:
+            raise ValueError("morphemes[%d].type 非法" % index)
+        kind = item["type"]
+        role = item.get("role") or ("PRIMARY" if index == 0 else
+                                    "PRIMARY_ACTION" if kind in ("BUTTON", "SWITCH", "SLIDER")
+                                    else "SECONDARY")
+        if role not in protocol.ROLE_PRIORITY:
+            raise ValueError("morphemes[%d].role 非法" % index)
+        label = str(item.get("label") or kind)[:40]
+        value_type = item.get("valueType") or _LAB_DEFAULT_VT[kind]
+        content = item.get("content") if isinstance(item.get("content"), dict) else \
+            _lab_content(kind, label, item.get("value"))
+        priority = item.get("priority")
+        morphemes.append({
+            "id": "t%d" % (index + 1), "type": kind, "role": role,
+            "priority": max(0, min(100, int(priority))) if isinstance(priority, (int, float))
+            else protocol.ROLE_PRIORITY[role],
+            "label": label, "semanticKey": str(item.get("q") or "lab." + kind.lower()),
+            "valueType": value_type, "content": content, "presentation": {}})
+    spec = {"version": "0.3", "scene": "layout_lab", "title": str(body.get("title") or "")[:40] or None,
+            "surface": {"type": "CARD", "size": size, "density": "AUTO"}, "morphemes": morphemes}
+    spec, label_decisions = plan_label_visibility(spec)
+    layout = plan_layout(spec, body.get("style_id", "light"), None)
+    rendered_spec = build_render_spec(spec, layout)
+    outputs = render_all(rendered_spec)
+    return {"morphemeSpec": spec, "labelDecisions": label_decisions, "layout": layout,
+            "renderSpec": rendered_spec, "outputs": outputs,
+            "code": outputs["html_css"]["standalone"]}
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB = ROOT / "web_v2"
@@ -66,11 +139,24 @@ class Handler(BaseHTTPRequestHandler):
         self.send_error(404)
 
     def do_POST(self):
-        if self.path != "/api/run":
+        if self.path not in ("/api/run", "/api/layout-test"):
             self.send_error(404)
             return
         if self.headers.get("X-Workbench-Token") != TOKEN:
             self.send_error(403)
+            return
+        if self.path == "/api/layout-test":
+            try:
+                size = int(self.headers.get("Content-Length", "0"))
+                if not 0 < size < 100000:
+                    raise ValueError("请求大小无效")
+                body = json.loads(self.rfile.read(size))
+                result = run_layout_test(body)
+            except Exception as exc:
+                self.send_error(400, str(exc).encode("ascii", "replace").decode())
+                return
+            self._send(json.dumps(result, ensure_ascii=False).encode("utf-8"),
+                       "application/json; charset=utf-8")
             return
         try:
             size = int(self.headers.get("Content-Length", "0"))

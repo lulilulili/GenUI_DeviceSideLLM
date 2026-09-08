@@ -52,6 +52,29 @@ border-radius:14px;padding:34px;display:flex;align-items:center;justify-content:
 .tag{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:0 8px;margin-right:6px;font-size:11.5px}
 .tag.tpl{color:var(--ok);border-color:var(--ok)}
 .tag.free{color:var(--warn);border-color:var(--warn)}
+/* ---- 布局实验室 ---- */
+.labstats{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 12px}
+.case-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:12px}
+.case-card{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px;cursor:pointer}
+.case-card:hover{border-color:var(--acc)}
+.case-card img{width:100%;border-radius:8px;background:#000;display:block;min-height:60px}
+.case-card .cc-head{display:flex;justify-content:space-between;align-items:baseline;margin:6px 0 2px}
+.case-card .cc-head b{font-size:12.5px}
+.case-card .cc-head small{color:var(--dim);font-size:11px}
+.case-card .types i{display:inline-block;font-style:normal;font-size:10px;color:var(--dim);
+  border:1px solid var(--line);border-radius:4px;padding:0 4px;margin:1px 2px 0 0}
+.case-card output{display:block;font-size:11.5px;margin-top:5px;color:var(--dim)}
+.case-card.pass{border-color:#1f5c3a}.case-card.pass output{color:var(--ok)}
+.case-card.warn{border-color:var(--warn)}.case-card.warn output{color:var(--warn)}
+.case-card.fail{border-color:var(--err)}.case-card.fail output{color:var(--err)}
+.lab-detail{display:grid;grid-template-columns:auto auto 1fr;gap:18px;align-items:start}
+.lab-detail .colhead{font-size:12px;color:var(--dim);margin-bottom:6px}
+.lab-detail img{max-width:260px;border-radius:10px;background:#000}
+.mbuilder table input,.mbuilder table select{padding:4px 6px;font-size:12px}
+.mbuilder td{padding:3px 4px;border-bottom:none}
+.mbuilder .rowbtn{background:var(--panel2);border:1px solid var(--line);color:var(--dim);padding:3px 9px;font-size:12px}
+.mbuilder .rowbtn:hover{color:var(--err);border-color:var(--err)}
+@media (max-width:1100px){.lab-detail{grid-template-columns:1fr}}
 table{width:100%;border-collapse:collapse;font-size:12.5px}
 th,td{border-bottom:1px solid var(--line);padding:5px 8px;text-align:left;vertical-align:top}
 th{color:var(--dim);font-weight:500;font-size:11.5px}
@@ -95,6 +118,7 @@ padding:2px 4px;overflow:hidden;white-space:nowrap}
   <span class="sub">用户话语 → 语素(1次LLM) → 能力绑定 → PDF原型匹配/自由布局 → 卡片</span>
   <nav>
     <button class="active" data-v="gen">生成</button>
+    <button data-v="lab">布局实验室</button>
     <button data-v="tpl">模板库</button>
     <button data-v="reg">能力注册表</button>
     <button data-v="doc">协议与流程</button>
@@ -193,6 +217,74 @@ padding:2px 4px;overflow:hidden;white-space:nowrap}
 </div>
 </div>
 
+<!-- ============ 布局实验室 ============ -->
+<div class="view" id="view-lab">
+  <div class="card">
+    <h2>PDF 用例测试集（68 个真实卡片实例，逐张对照布局准确性）</h2>
+    <div class="hint" style="margin-bottom:4px">
+      每个用例 = PDF 实例卡的组件构成（首项为 PRIMARY，动作类为 *_ACTION，其余 SECONDARY）。
+      判定口径：<span style="color:var(--ok)">绿=模板命中且全部放置</span> ·
+      <span style="color:var(--warn)">黄=进入自由布局</span> ·
+      <span style="color:var(--err)">红=有语素未放置或出错</span>。点击用例查看 PDF 原图 vs v2 渲染对照。
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;margin:8px 0">
+      <select id="labFilter" style="width:auto">
+        <option value="all" selected>全部尺寸</option>
+        <option value="1">2x1（14 例）</option><option value="2">2x2（28 例）</option>
+        <option value="3">3x2（15 例）</option><option value="4">3x3（11 例）</option>
+      </select>
+      <button class="tab" id="labRunAll">▶ 运行全部</button>
+      <span class="hint" id="labProgress" style="margin:0"></span>
+    </div>
+    <div class="labstats" id="labStats"></div>
+    <div class="case-grid" id="caseGrid"></div>
+  </div>
+
+  <div class="card" id="labDetail" style="display:none">
+    <h2 id="labDetailTitle">用例详情</h2>
+    <div class="lab-detail">
+      <div><div class="colhead">PDF 原图</div><img id="labPdfImg" alt="pdf"></div>
+      <div><div class="colhead">v2 渲染（同一组语素）</div>
+        <div class="previewBox" style="min-width:0;min-height:0;padding:22px">
+          <iframe id="labPreview" style="border:none;overflow:hidden" scrolling="no"></iframe>
+        </div>
+        <div class="meta" id="labMeta" style="margin-top:8px"></div>
+        <div id="labWire" style="margin-top:8px"></div>
+        <button class="tab" id="labToBuilder" style="margin-top:8px">⬇ 载入语素构造器微调</button>
+      </div>
+      <div>
+        <div class="tabs">
+          <button class="tab active" data-lt="spec">语素</button>
+          <button class="tab" data-lt="layout">布局</button>
+          <button class="tab" data-lt="html">card.html</button>
+          <button class="tab" data-lt="a2ui">A2UI</button>
+          <button class="tab" data-lt="dsl">DSL</button>
+        </div>
+        <pre id="labCode" style="max-height:430px"></pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mbuilder">
+    <h2>语素构造器（确定性 · 不经过模型，直接测模板选择与布局）</h2>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:8px">
+      <div><label>标题</label><input id="mbTitle" value="测试卡片" style="width:140px"></div>
+      <div><label>尺寸</label><select id="mbSize" style="width:auto">
+        <option>2x1</option><option selected>2x2</option><option>3x2</option><option>3x3</option></select></div>
+      <div><label>风格</label><select id="mbStyle" style="width:auto">
+        <option value="light" selected>light</option><option value="blue">blue</option>
+        <option value="violet">violet</option><option value="teal">teal</option><option value="orange">orange</option></select></div>
+      <button class="tab" id="mbAdd">＋ 添加语素</button>
+      <button class="run" id="mbRun" style="width:auto;margin:0;padding:8px 22px">▶ 运行布局</button>
+    </div>
+    <table><thead><tr><th style="width:26px">#</th><th>组件</th><th>标签</th><th>角色</th>
+      <th>数据形态</th><th>值(可选)</th><th>优先级(可选)</th><th></th></tr></thead>
+      <tbody id="mbRows"></tbody></table>
+    <div class="hint">组件与角色直接决定模板槽位匹配；留空值时用确定性示例数据填充。
+      运行结果显示在上方「用例详情」面板。</div>
+  </div>
+</div>
+
 <!-- ============ 模板库 ============ -->
 <div class="view" id="view-tpl">
   <div class="card">
@@ -277,6 +369,7 @@ document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
   if(b.dataset.v==="tpl") renderTemplates();
   if(b.dataset.v==="reg") renderRegistry();
   if(b.dataset.v==="doc") renderMeta();
+  if(b.dataset.v==="lab") renderLabCases();
 });
 
 document.querySelectorAll(".chip").forEach(c=>c.onclick=()=>{$("prompt").value=c.textContent;});
@@ -466,6 +559,191 @@ async function renderMeta(){
     "\n角色优先级      "+JSON.stringify(meta.rolePriority)+
     "\n风格预设        "+JSON.stringify(meta.styles);
 }
+/* ================================================================
+ *  布局实验室：PDF 用例测试集 + 语素构造器（全确定性，不经过模型）
+ * ================================================================ */
+const RAW_CASES={
+1:[['搜索','TEXT ICON'],['未接来电','TEXT STATUS BUTTON'],['步数','METRIC ICON'],['北京天气','STATUS METRIC ICON'],['联系人快捷拨号','TEXT BUTTON'],['24小时内未接来电','TEXT STATUS ICON'],['睡眠时长','TEXT METRIC PROGRESS'],['短视频剪辑','TEXT BUTTON'],['睡前 BGM','TEXT STATUS BUTTON'],['舒缓减压呼吸','TEXT PROGRESS BUTTON'],['饮食日记','TEXT BUTTON'],['电影继续播放','TEXT STATUS BUTTON'],['开始运动','TEXT BUTTON'],['闹钟提醒','TEXT STATUS BUTTON']],
+2:[['歌单推荐','TEXT IMAGE BUTTON'],['地球资讯','IMAGE TEXT'],['宇宙探险记','TEXT IMAGE BUTTON'],['附近加油站','TEXT STATUS BUTTON'],['手机使用','METRIC LIST PROGRESS'],['安装状态扫描','PROGRESS STATUS BUTTON'],['今日步数','METRIC BUTTON'],['今日无日程','TEXT METRIC'],['常用联系人','TEXT BUTTON BUTTON BUTTON BUTTON'],['今日会议','TEXT LIST'],['运动摄影','IMAGE TEXT BUTTON'],['科技新闻','IMAGE TEXT'],['CityPop Music','TEXT IMAGE BUTTON'],['应用检测','TEXT BUTTON'],['还可摄入','METRIC LIST PROGRESS'],['春节倒计时','METRIC TEXT'],['睡眠评分','METRIC STATUS BUTTON'],['北京天气方卡','STATUS METRIC TEXT'],['相机快捷方式','BUTTON BUTTON BUTTON BUTTON'],['全部待办','TEXT LIST'],['录音机','TEXT PROGRESS BUTTON'],['插画设计指南','TEXT IMAGE'],['阳台环境','TEXT METRIC METRIC METRIC'],['压力检测','METRIC STATUS BUTTON'],['每日技巧','TEXT LIST'],['Sound X','TEXT IMAGE BUTTON'],['会议提醒','STATUS TEXT BUTTON'],['跑步课程','TEXT IMAGE PROGRESS']],
+3:[['车主服务','TEXT BUTTON BUTTON BUTTON BUTTON'],['应用搜索','TEXT BUTTON BUTTON BUTTON BUTTON'],['英雄联盟','TEXT IMAGE BUTTON BUTTON'],['粉雾海音乐','TEXT IMAGE BUTTON BUTTON BUTTON'],['横向天气','STATUS METRIC LIST'],['备忘录','TEXT LIST'],['网站推荐','IMAGE TEXT BUTTON'],['全屋设备','TEXT BUTTON BUTTON BUTTON BUTTON'],['发现更多应用','TEXT BUTTON BUTTON BUTTON'],['月历','METRIC LIST'],['会议日程','TEXT LIST BUTTON'],['每日精选','TEXT LIST IMAGE'],['维多利亚影视','IMAGE TEXT BUTTON'],['古典音乐','IMAGE TEXT BUTTON BUTTON BUTTON'],['汽车资讯','IMAGE TEXT LIST']],
+4:[['Cybertruck 资讯','IMAGE TEXT'],['古典播放列表','IMAGE TEXT LIST BUTTON'],['月历大卡','METRIC LIST'],['备忘录大卡','TEXT LIST'],['视频通话','IMAGE BUTTON BUTTON BUTTON'],['媒体推荐列表','IMAGE TEXT LIST BUTTON'],['十日天气','STATUS METRIC LIST PROGRESS'],['两日日程','TEXT LIST'],['时尚图集','IMAGE TEXT LIST'],['汽车新闻流','IMAGE TEXT LIST'],['书籍推荐','TEXT IMAGE LIST']]
+};
+const LAB_SIZE_BY_PAGE={1:"2x1",2:"2x2",3:"3x2",4:"3x3"};
+const LAB_TYPE_CN={TEXT:"文本",METRIC:"数值",STATUS:"状态",PROGRESS:"进度",SWITCH:"开关",
+  SLIDER:"滑条",BUTTON:"操作",LIST:"列表",IMAGE:"图片",ICON:"图标"};
+const LAB_CASES=[];
+for(const [page,items] of Object.entries(RAW_CASES))
+  items.forEach(([title,types],index)=>{
+    const morphemes=types.split(" ").map((type,i)=>({
+      type, label:i===0?title:LAB_TYPE_CN[type],
+      role:i===0?"PRIMARY":["BUTTON","SWITCH","SLIDER"].includes(type)?"PRIMARY_ACTION":"SECONDARY"}));
+    LAB_CASES.push({id:`P${page}-${String(index+1).padStart(2,"0")}`, page:+page,
+      size:LAB_SIZE_BY_PAGE[page], title, morphemes});
+  });
+const labResults=new Map();
+let labCurrent=null;
+
+async function labApi(body){
+  const res=await fetch("/api/layout-test",{method:"POST",
+    headers:{"Content-Type":"application/json","X-Workbench-Token":TOKEN},body:JSON.stringify(body)});
+  if(!res.ok) throw new Error("HTTP "+res.status+" "+(await res.text()).slice(0,200));
+  return res.json();
+}
+function labVisible(){
+  const f=$("labFilter").value;
+  return LAB_CASES.filter(c=>f==="all"||String(c.page)===f);
+}
+function labVerdict(r){
+  if(r.error) return ["fail","✗ "+r.error];
+  const l=r.layout, un=l.unplaced.length;
+  if(un) return ["fail",`${l.templateName} · 未放置 ${un}`];
+  if(l.mode==="FREE") return ["warn","自由布局"];
+  return ["pass",`${l.templateName} · ${(l.confidence*100).toFixed(0)}%`+(l.mode==="TEMPLATE_EXTENDED"?" · 扩展":"")];
+}
+function labStats(){
+  const run=[...labResults.values()];
+  const hit=run.filter(r=>!r.error&&r.layout.mode!=="FREE"&&!r.layout.unplaced.length).length;
+  const ext=run.filter(r=>!r.error&&r.layout.mode==="TEMPLATE_EXTENDED").length;
+  const free=run.filter(r=>!r.error&&r.layout.mode==="FREE").length;
+  const bad=run.filter(r=>r.error||(r.layout&&r.layout.unplaced.length)).length;
+  const pct=run.length?((hit/run.length)*100).toFixed(1):"—";
+  const rows=[["已运行",run.length+" / "+LAB_CASES.length],["模板命中率",pct+"%"],
+    ["命中(含扩展)",hit],["其中留白扩展",ext],["自由布局",free],["未放置/出错",bad]];
+  $("labStats").innerHTML=rows.map(([k,v])=>
+    `<div class='stat'><div class='v'>${v}</div><div class='k'>${k}</div></div>`).join("");
+}
+function renderLabCases(){
+  const grid=$("caseGrid"); grid.innerHTML="";
+  for(const test of labVisible()){
+    const card=document.createElement("div"); card.className="case-card"; card.id="case-"+test.id;
+    card.innerHTML=`<img loading="lazy" src="/assets/pdf-cases/${test.id}.jpg" onerror="this.style.display='none'">
+      <div class="cc-head"><b>${test.title}</b><small>${test.id} · ${test.size}</small></div>
+      <div class="types">${test.morphemes.map(m=>`<i>${m.type}</i>`).join("")}</div>
+      <output>待运行 — 点击运行并查看对照</output>`;
+    const cached=labResults.get(test.id);
+    if(cached){const [cls,txt]=labVerdict(cached); card.classList.add(cls); card.querySelector("output").textContent=txt;}
+    card.onclick=()=>runLabCase(test);
+    grid.appendChild(card);
+  }
+  labStats();
+}
+async function runLabCase(test){
+  const card=$("case-"+test.id), out=card&&card.querySelector("output");
+  try{
+    let result=labResults.get(test.id);
+    if(!result||result.error){
+      if(out) out.textContent="运行中…";
+      result=await labApi({title:test.title,size:test.size,style_id:"light",morphemes:test.morphemes});
+      labResults.set(test.id,result);
+    }
+    showLabResult(test,result);
+  }catch(e){ labResults.set(test.id,{error:e.message}); }
+  if(card){const r=labResults.get(test.id),[cls,txt]=labVerdict(r);
+    card.classList.remove("pass","warn","fail"); card.classList.add(cls); out.textContent=txt;}
+  labStats();
+}
+async function showLabResult(test,result){
+  labCurrent={test,result};
+  $("labDetail").style.display="";
+  $("labDetailTitle").textContent=`用例详情 — ${test.title}（${test.id||"构造器"} · ${test.size}）`;
+  const img=$("labPdfImg");
+  if(test.id){ img.style.display=""; img.src=`/assets/pdf-cases/${test.id}.jpg`; }
+  else img.style.display="none";
+  if(result.error){ $("labMeta").innerHTML="<span class='err'>"+result.error+"</span>"; return; }
+  const frame=$("labPreview");
+  const m=/width:(\d+)px;height:(\d+)px/.exec(result.outputs.html_css.files["card.css"]);
+  if(m){frame.width=+m[1]+8;frame.height=+m[2]+8;}
+  frame.srcdoc="<body style='margin:4px;background:transparent'>"+result.code+"</body>";
+  const l=result.layout, isFree=l.mode==="FREE";
+  const hiddenLabels=(result.labelDecisions||[]).filter(d=>!d.show).map(d=>d.label);
+  $("labMeta").innerHTML=
+    `<span class='tag ${isFree?"free":"tpl"}'>${isFree?"自由布局":"模板命中"}</span>`+
+    `<b>${l.templateName}</b> <span style='color:var(--dim)'>(${l.templateId})</span><br>`+
+    `来源：${l.source||"—"} · 覆盖率 ${(l.confidence*100).toFixed(0)}%`+
+    (l.alternatives&&l.alternatives.length?`<br>候选：${l.alternatives.map(a=>a.templateId+"("+(a.coverage*100).toFixed(0)+"%)").join(" / ")}`:"")+
+    (hiddenLabels.length?`<br>标签消隐：${hiddenLabels.join("、")}`:"")+
+    (l.unplaced.length?`<br><span class='err'>未放置：${l.unplaced.join(",")}</span>`:"");
+  if(!tplData) tplData=await (await fetch("/api/templates")).json();
+  const slots=l.slots.map(s=>({id:(s.component?s.component.type:(s.placeholder||"")),
+    rect:s.rect,required:s.match==="EXACT"||s.match==="FAMILY",accepts:null}));
+  $("labWire").innerHTML="<div class='hint' style='margin-bottom:4px'>槽位分布：</div>"+
+    wireframe(test.size,slots,tplData.sizes,0.5,false);
+  showLabTab();
+}
+function showLabTab(){
+  if(!labCurrent||labCurrent.result.error) return;
+  const t=document.querySelector("[data-lt].active").dataset.lt, r=labCurrent.result, v=$("labCode");
+  if(t==="spec") v.textContent=JSON.stringify(r.morphemeSpec,null,2);
+  else if(t==="layout") v.textContent=JSON.stringify(r.layout,null,2);
+  else if(t==="html") v.textContent=r.outputs.html_css.files["card.css"]+"\n\n"+r.outputs.html_css.files["card.html"];
+  else if(t==="a2ui") v.textContent=r.outputs.a2ui.ndjson;
+  else v.textContent=r.outputs.dsl.code;
+}
+document.querySelectorAll("[data-lt]").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll("[data-lt]").forEach(x=>x.classList.remove("active"));
+  b.classList.add("active"); showLabTab();
+});
+$("labFilter").onchange=renderLabCases;
+$("labRunAll").onclick=async()=>{
+  const list=labVisible(); let n=0;
+  for(const test of list){
+    n++; $("labProgress").textContent=`运行 ${n}/${list.length} …`;
+    if(!labResults.has(test.id)||labResults.get(test.id).error){
+      try{ labResults.set(test.id,await labApi({title:test.title,size:test.size,style_id:"light",morphemes:test.morphemes})); }
+      catch(e){ labResults.set(test.id,{error:e.message}); }
+    }
+  }
+  $("labProgress").textContent="完成";
+  renderLabCases();
+};
+/* ---- 语素构造器 ---- */
+const MB_ROLES=["PRIMARY","SECONDARY","SUPPORTING","PRIMARY_ACTION","SECONDARY_ACTION","WARNING"];
+const MB_VTS=["STRING","NUMBER","PERCENTAGE","ENUM","BOOLEAN","DURATION","DATETIME","LIST","UNKNOWN"];
+function mbAddRow(m){
+  m=m||{type:"TEXT",label:"",role:"SECONDARY",valueType:"",value:"",priority:""};
+  const tr=document.createElement("tr");
+  const opt=(list,sel)=>list.map(x=>`<option${x===sel?" selected":""}>${x}</option>`).join("");
+  tr.innerHTML=`<td class="mbn"></td>
+    <td><select class="mb-type">${opt(Object.keys(LAB_TYPE_CN),m.type)}</select></td>
+    <td><input class="mb-label" value="${(m.label||"").replace(/"/g,"&quot;")}" style="width:110px"></td>
+    <td><select class="mb-role">${opt(MB_ROLES,m.role)}</select></td>
+    <td><select class="mb-vt"><option value="">自动</option>${opt(MB_VTS,m.valueType)}</select></td>
+    <td><input class="mb-value" value="${m.value!=null?String(m.value).replace(/"/g,"&quot;"):""}" style="width:80px"></td>
+    <td><input class="mb-pri" value="${m.priority||""}" style="width:60px" placeholder="按角色"></td>
+    <td><button class="rowbtn" onclick="this.closest('tr').remove();mbRenumber()">✕</button></td>`;
+  $("mbRows").appendChild(tr); mbRenumber();
+}
+function mbRenumber(){ document.querySelectorAll("#mbRows tr").forEach((tr,i)=>tr.querySelector(".mbn").textContent=i+1); }
+$("mbAdd").onclick=()=>mbAddRow();
+$("mbRun").onclick=async()=>{
+  const morphemes=[...document.querySelectorAll("#mbRows tr")].map(tr=>({
+    type:tr.querySelector(".mb-type").value,
+    label:tr.querySelector(".mb-label").value,
+    role:tr.querySelector(".mb-role").value,
+    valueType:tr.querySelector(".mb-vt").value||undefined,
+    value:tr.querySelector(".mb-value").value||undefined,
+    priority:tr.querySelector(".mb-pri").value?+tr.querySelector(".mb-pri").value:undefined}));
+  if(!morphemes.length){ alert("请先添加语素"); return; }
+  const test={id:null,title:$("mbTitle").value,size:$("mbSize").value};
+  try{
+    const result=await labApi({title:test.title,size:test.size,style_id:$("mbStyle").value,morphemes});
+    showLabResult(test,result);
+    $("labDetail").scrollIntoView({behavior:"smooth"});
+  }catch(e){ $("labDetail").style.display=""; $("labMeta").innerHTML="<span class='err'>"+e.message+"</span>"; }
+};
+$("labToBuilder").onclick=()=>{
+  if(!labCurrent) return;
+  $("mbRows").innerHTML="";
+  $("mbTitle").value=labCurrent.test.title||"测试卡片";
+  $("mbSize").value=labCurrent.test.size;
+  (labCurrent.result.morphemeSpec?labCurrent.result.morphemeSpec.morphemes:labCurrent.test.morphemes)
+    .forEach(m=>mbAddRow({type:m.type,label:m.label,role:m.role,valueType:m.valueType,priority:m.priority}));
+  document.querySelector(".mbuilder").scrollIntoView({behavior:"smooth"});
+};
+mbAddRow({type:"METRIC",label:"电量",role:"PRIMARY",valueType:"PERCENTAGE",value:"67"});
+mbAddRow({type:"STATUS",label:"充电状态",role:"SECONDARY",valueType:"ENUM",value:"未在充电"});
+mbAddRow({type:"BUTTON",label:"电池管理",role:"PRIMARY_ACTION"});
+
 $("runBtn").onclick=run;
 </script>
 </body>
