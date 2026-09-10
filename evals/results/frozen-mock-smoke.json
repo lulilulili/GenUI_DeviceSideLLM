@@ -1,0 +1,150 @@
+{
+  "dataset": "evals\\frozen\\frozen_set_template.jsonl",
+  "provider": "mock",
+  "model": "mock",
+  "overall": {
+    "cases": 16,
+    "errors": 0,
+    "case_pass_rate": 0.0,
+    "first_pass_rate": 1.0,
+    "domain_acc": 0.8333,
+    "key_recall": 0.05,
+    "key_precision": 0.0278,
+    "key_f1": 0.0357,
+    "role_acc": 1.0,
+    "exact_bind_rate": 1.0,
+    "forbidden_violations": 0,
+    "action_hallucination_rate": 0.6667,
+    "action_omission_rate": 0.0,
+    "reject": {
+      "cases": 4,
+      "pass_rate": 0.0,
+      "false_bind_exact_alias": 12,
+      "false_bind_tokens": 0
+    }
+  },
+  "buckets": {
+    "cross_domain": {
+      "cases": 2,
+      "errors": 0,
+      "case_pass_rate": 0.0,
+      "first_pass_rate": 1.0,
+      "domain_acc": 1.0,
+      "key_recall": 0.0,
+      "key_precision": 0.0,
+      "key_f1": 0.0,
+      "role_acc": null,
+      "exact_bind_rate": 1.0,
+      "forbidden_violations": 0,
+      "action_hallucination_rate": 1.0,
+      "action_omission_rate": 0.0
+    },
+    "domain_only": {
+      "cases": 2,
+      "errors": 0,
+      "case_pass_rate": 0.0,
+      "first_pass_rate": 1.0,
+      "domain_acc": 0.5,
+      "key_recall": 0.0,
+      "key_precision": 0.0,
+      "key_f1": 0.0,
+      "role_acc": null,
+      "exact_bind_rate": 1.0,
+      "forbidden_violations": 0,
+      "action_hallucination_rate": 0.5,
+      "action_omission_rate": 0.0
+    },
+    "multi_action": {
+      "cases": 2,
+      "errors": 0,
+      "case_pass_rate": 0.0,
+      "first_pass_rate": 1.0,
+      "domain_acc": 1.0,
+      "key_recall": 0.2,
+      "key_precision": 0.1667,
+      "key_f1": 0.1818,
+      "role_acc": 1.0,
+      "exact_bind_rate": 1.0,
+      "forbidden_violations": 0,
+      "action_hallucination_rate": 0.0,
+      "action_omission_rate": 0.0
+    },
+    "negation_correction": {
+      "cases": 2,
+      "errors": 0,
+      "case_pass_rate": 0.0,
+      "first_pass_rate": 1.0,
+      "domain_acc": 1.0,
+      "key_recall": 0.0,
+      "key_precision": 0.0,
+      "key_f1": 0.0,
+      "role_acc": null,
+      "exact_bind_rate": 1.0,
+      "forbidden_violations": 0,
+      "action_hallucination_rate": 1.0,
+      "action_omission_rate": 0.0
+    },
+    "out_of_field": {
+      "cases": 2,
+      "errors": 0,
+      "case_pass_rate": 0.0,
+      "first_pass_rate": 1.0,
+      "reject": {
+        "cases": 2,
+        "pass_rate": 0.0,
+        "false_bind_exact_alias": 6,
+        "false_bind_tokens": 0
+      }
+    },
+    "paraphrase_longtail": {
+      "cases": 2,
+      "errors": 0,
+      "case_pass_rate": 0.0,
+      "first_pass_rate": 1.0,
+      "domain_acc": 0.5,
+      "key_recall": 0.0,
+      "key_precision": 0.0,
+      "key_f1": 0.0,
+      "role_acc": null,
+      "exact_bind_rate": 1.0,
+      "forbidden_violations": 0,
+      "action_hallucination_rate": 1.0,
+      "action_omission_rate": 0.0
+    },
+    "single_domain_explicit": {
+      "cases": 2,
+      "errors": 0,
+      "case_pass_rate": 0.0,
+      "first_pass_rate": 1.0,
+      "domain_acc": 1.0,
+      "key_recall": 0.0,
+      "key_precision": 0.0,
+      "key_f1": 0.0,
+      "role_acc": null,
+      "exact_bind_rate": 1.0,
+      "forbidden_violations": 0,
+      "action_hallucination_rate": 0.5,
+      "action_omission_rate": 0.0
+    },
+    "unsupported": {
+      "cases": 2,
+      "errors": 0,
+      "case_pass_rate": 0.0,
+      "first_pass_rate": 1.0,
+      "reject": {
+        "cases": 2,
+        "pass_rate": 0.0,
+        "false_bind_exact_alias": 6,
+        "false_bind_tokens": 0
+      }
+    }
+  },
+  "latency_ms": {
+    "p50": 5.2,
+    "p95": 7.5
+  },
+  "prompt_contract": {
+    "version": "morpheme-v2-2026-09-11",
+    "combined": "008d4f3952e4a661c5ab9d014f9d25c0d5c9e2e45da3acc8572413c9ae81bf50"
+  }
+}

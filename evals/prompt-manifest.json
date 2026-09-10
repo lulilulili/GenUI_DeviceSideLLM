@@ -1,0 +1,21 @@
+{
+  "contractVersion": "morpheme-v2-2026-09-11",
+  "combined": "008d4f3952e4a661c5ab9d014f9d25c0d5c9e2e45da3acc8572413c9ae81bf50",
+  "artifacts": {
+    "fewshot": "c088d16c7574ed4043c1c92d8ea7b5b06802d62dbe10c86cedffa42c2920bdf4",
+    "message_template_sample": "d23ed5fe385057ce57523c0ca049572773fc847fdf7d000f91baa54c1377a3e3",
+    "registry_keys_CONTENT": "7380fb2616b24ce4d31ee551315f5232a2bee1360e6f3710753422a1edbfb2b9",
+    "registry_keys_DEVICE": "98015c227481f870703d1e44c5cfb2c4f9acadd3d87eb1e4e5adfc4a9574d55c",
+    "registry_keys_SMART_HOME": "236238eda82dd67562f57c7c01a32f43f19e9534c215c54e2bac6c751c6846ba",
+    "registry_keys_TASK": "ba3e802cb4295ec321b6962e7070867c1ab126fc7ed54ab95dcef91fad616740",
+    "registry_keys_WEATHER": "e23315c35f872154fcbd159146e6795df11a4a50aa467d289fa8c0f1e2c2cccc",
+    "router_system": "d09ce0271ae219720aa5209dac2d071f944180d4e9168e5320400dfabc9a6ad0",
+    "schema_2x1": "b6918d59edf7ef2867a2f848865209c4662985c2d87328e36d2ab0d188d0d8ea",
+    "schema_2x2": "4119ac3f7a11ec1367f7d8c1a0aaad66680cfe444a931ac921a66f6e8d73d7e8",
+    "schema_3x2": "95597f6d8f5201489c11992009bad4b29705ac59e349bd88456f0ab77af84bce",
+    "schema_3x3": "95597f6d8f5201489c11992009bad4b29705ac59e349bd88456f0ab77af84bce",
+    "schema_AUTO": "95597f6d8f5201489c11992009bad4b29705ac59e349bd88456f0ab77af84bce",
+    "system_prompt": "683e362b3f9f6d634db863e6c393c0d898595a43ede960427e788ef1752ee109"
+  },
+  "note": "训练数据与评测报告必须引用 combined 哈希；代码改动后先 --check 发现漂移，确认后 --write 升版本。"
+}
