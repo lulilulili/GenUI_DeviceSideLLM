@@ -5,3 +5,7 @@ __pycache__/
 
 # 公司实习生交接数据(248MB,不上传个人仓库;双机同步请单独拷贝)
 实习生数据整理/
+
+# 实习生数据的衍生草稿同样不上传
+evals/frozen/intern_distilled_*
+evals/frozen/intern_used_seed_ids.txt
