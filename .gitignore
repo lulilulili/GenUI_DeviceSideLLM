@@ -9,3 +9,5 @@ __pycache__/
 # 实习生数据的衍生草稿同样不上传
 evals/frozen/intern_distilled_*
 evals/frozen/intern_used_seed_ids.txt
+evals/frozen/frozen_set_v1.jsonl
+evals/results/frozen-*
