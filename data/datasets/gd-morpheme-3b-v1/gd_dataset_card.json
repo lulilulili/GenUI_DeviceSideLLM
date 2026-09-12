@@ -1,0 +1,21 @@
+{
+  "dataset": "gd-morpheme-3b-sft-v1",
+  "source": "GenUI v2 capability registry",
+  "contract": "morpheme-v2",
+  "model_output": "t + m[l,q,f,r] only",
+  "counts": {
+    "total": 3636,
+    "morpheme": 3636
+  },
+  "split": {
+    "train": 2736,
+    "dev": 432,
+    "test": 468
+  },
+  "skeletons": 101,
+  "intern_asset_policy": "intern V4 Frame data is evaluation/reference only; not mixed into morpheme SFT",
+  "limitations": [
+    "deterministic paraphrases need human review",
+    "registry coverage defines answer space"
+  ]
+}
