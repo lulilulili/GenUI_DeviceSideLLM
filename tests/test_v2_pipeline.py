@@ -234,6 +234,18 @@ class DraftValidationTests(unittest.TestCase):
 
 
 class PipelineTests(unittest.TestCase):
+    def test_render_existing_draft_does_not_call_provider(self):
+        class ExplodingProvider:
+            def complete(self, *args, **kwargs):
+                raise AssertionError("JSON 直渲染不应调用模型")
+
+        draft = {"t": "耳机状态", "m": [
+            {"l": "耳机电量", "q": "headphones.battery.level", "f": "PERCENTAGE", "r": "PRIMARY"}
+        ]}
+        result = PipelineV2(ExplodingProvider()).render_draft(draft, "2x2")
+        self.assertEqual(result["draft"]["m"][0]["q"], "headphones.battery.level")
+        self.assertIn("gv2-card", result["code"])
+
     def test_end_to_end_mock(self):
         events = []
         result = PipelineV2(MockProviderV2(), on_event=events.append).generate(

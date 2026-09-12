@@ -119,6 +119,7 @@ padding:2px 4px;overflow:hidden;white-space:nowrap}
   <nav>
     <button class="active" data-v="gen">生成</button>
     <button data-v="lab">布局实验室</button>
+    <button data-v="batch">批量筛查</button>
     <button data-v="tpl">模板库</button>
     <button data-v="reg">能力注册表</button>
     <button data-v="doc">协议与流程</button>
@@ -220,6 +221,32 @@ padding:2px 4px;overflow:hidden;white-space:nowrap}
   </div>
 </div>
 </div>
+</div>
+
+<!-- ============ 批量筛查 ============ -->
+<div class="view" id="view-batch">
+  <div class="card">
+    <h2>训练集批量筛查</h2>
+    <div class="hint">选择 GD Morpheme 训练集，按序号逐条运行。最后 JSON 模式不调用模型，只执行确定性后半段；原始 Prompt 模式调用当前模型后再执行完整流程。单条失败会记录并继续。</div>
+    <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin:12px 0">
+      <label style="min-width:120px">数据集<select id="batchSplit"><option value="train">train</option><option value="dev">dev</option><option value="test">test</option></select></label>
+      <label style="min-width:190px">运行模式<select id="batchMode"><option value="json">最后 JSON（不调用模型）</option><option value="prompt">原始 Prompt（调用当前模型）</option></select></label>
+      <label style="min-width:220px;flex:1">序号（支持 1,3,5-10）<input id="batchIndices" value="1-5"></label>
+      <button class="run" id="batchRun" style="width:auto;margin:0">▶ 开始</button>
+      <button class="tab" id="batchStop">■ 停止</button>
+      <button class="tab" id="batchClear">清空</button>
+    </div>
+    <div class="hint" id="batchDatasetMeta">正在读取数据集…</div>
+    <div class="hint" id="batchStatus"></div>
+    <div id="batchResults" style="display:grid;gap:8px;margin-top:10px"></div>
+  </div>
+  <div class="card" id="batchDetail" style="display:none">
+    <h2>批量样本详情</h2>
+    <div class="result">
+      <div class="previewBox"><iframe id="batchPreview" style="border:none;overflow:hidden" scrolling="no"></iframe></div>
+      <div><pre id="batchJson" style="max-height:520px"></pre></div>
+    </div>
+  </div>
 </div>
 
 <!-- ============ 布局实验室 ============ -->
@@ -365,6 +392,7 @@ padding:2px 4px;overflow:hidden;white-space:nowrap}
 const TOKEN="__REQUEST_TOKEN__";
 const $=id=>document.getElementById(id);
 let stagesData={}, outputs=null, resultData=null, usage=[], promptUsed=null, lastTemplateId=null, tplData=null;
+function escapeHtml(value){return String(value).replace(/[&<>\"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));}
 
 /* ---------- nav ---------- */
 document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
@@ -753,6 +781,70 @@ mbAddRow({type:"STATUS",label:"充电状态",role:"SECONDARY",valueType:"ENUM",v
 mbAddRow({type:"BUTTON",label:"电池管理",role:"PRIMARY_ACTION"});
 
 $("runBtn").onclick=run;
+
+/* ---------- training batch screener ---------- */
+let batchAbort=false,batchItems=[];
+async function refreshBatchMeta(){
+  const split=$("batchSplit").value;
+  const res=await fetch("/api/dataset?split="+encodeURIComponent(split));
+  if(!res.ok)throw new Error("读取数据集失败 HTTP "+res.status);
+  const data=await res.json();
+  $("batchDatasetMeta").textContent=split+" 共 "+data.count+" 条；序号支持逗号与范围，例如 1,3,5-10。";
+}
+function parseBatchIndices(text,total){
+  const out=[],seen=new Set();
+  for(const raw of text.replaceAll("，",",").split(",")){
+    const token=raw.trim();if(!token)continue;let a,b;
+    if(token.includes("-")){const parts=token.split("-");if(parts.length!==2)throw new Error("序号范围错误："+token);a=Number(parts[0]);b=Number(parts[1]);if(a>b)[a,b]=[b,a];}
+    else{a=Number(token);b=a;}
+    if(!Number.isInteger(a)||!Number.isInteger(b)||a<1||b>total)throw new Error("序号超出范围："+token);
+    for(let i=a;i<=b;i++)if(!seen.has(i)){seen.add(i);out.push(i);}
+  }
+  if(!out.length)throw new Error("请输入至少一个序号");
+  if(out.length>100)throw new Error("单次最多筛查 100 条");
+  return out;
+}
+function batchCard(ev){
+  const el=document.createElement("div");
+  el.style="border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--panel2);cursor:pointer;border-left:3px solid "+(ev.ok?"var(--ok)":"var(--err)");
+  el.innerHTML="<b>#"+ev.index+" · "+(ev.ok?"✓ 成功":"✗ 失败")+"</b><div class='hint'>"+escapeHtml(ev.request||"")+"</div><div class='hint "+(ev.ok?"":"err")+"'>"+(ev.ok?"点击查看渲染结果（"+(ev.result.layout?.templateId||"自由布局")+"）":escapeHtml(ev.error||"未知错误"))+"</div>";
+  if(ev.ok)el.onclick=()=>showBatchItem(ev);
+  $("batchResults").appendChild(el);
+}
+function showBatchItem(ev){
+  const result=ev.result;
+  $("batchDetail").style.display="";
+  $("batchJson").textContent=JSON.stringify({index:ev.index,request:ev.request,result},null,2);
+  if(result.code){$("batchPreview").srcdoc="<body style='margin:4px;background:transparent'>"+result.code+"</body>";}
+  $("batchDetail").scrollIntoView({behavior:"smooth",block:"start"});
+}
+async function runBatch(){
+  const split=$("batchSplit").value,mode=$("batchMode").value;
+  const meta=await (await fetch("/api/dataset?split="+encodeURIComponent(split))).json();
+  const indices=parseBatchIndices($("batchIndices").value,meta.count);
+  batchAbort=false;$("batchRun").disabled=true;$("batchResults").innerHTML="";$("batchDetail").style.display="none";
+  let ok=0,fail=0;
+  const body={split,mode,indices,provider:$("provider").value,base_url:$("baseUrl").value,model:$("model").value,api_key:$("apiKey").value,card_size:$("size").value,style_id:$("style").value,features:{variants:$("featVariants").checked,ux_budget:$("featUxBudget").checked}};
+  try{
+    const res=await fetch("/api/batch",{method:"POST",headers:{"Content-Type":"application/json","X-Workbench-Token":TOKEN},body:JSON.stringify(body)});
+    if(!res.ok)throw new Error("HTTP "+res.status+" "+await res.text());
+    const reader=res.body.getReader(),dec=new TextDecoder();let buf="";
+    while(true){const part=await reader.read();if(part.done)break;buf+=dec.decode(part.value,{stream:true});let at;
+      while((at=buf.indexOf("\n"))>=0){const line=buf.slice(0,at).trim();buf=buf.slice(at+1);if(!line)continue;const ev=JSON.parse(line);
+        if(ev.type==="item_start")$("batchStatus").textContent="运行中：#"+ev.index+"（"+ev.position+"/"+ev.total+"）";
+        if(ev.type==="item_result"){batchCard(ev);if(ev.ok)ok++;else fail++;}
+        if(ev.type==="done")$("batchStatus").textContent="完成：成功 "+ok+"，失败 "+fail+"，共处理 "+(ok+fail)+"/"+indices.length;}
+      if(batchAbort){await reader.cancel();return;}
+    }
+  }catch(e){$("batchStatus").textContent="✗ "+e.message;}
+  finally{$("batchRun").disabled=false;}
+}
+document.querySelector('button[data-v="batch"]').onclick=()=>{document.querySelectorAll("nav button").forEach(x=>x.classList.remove("active"));document.querySelector('button[data-v="batch"]').classList.add("active");document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));$("view-batch").classList.add("active");refreshBatchMeta().catch(e=>$("batchDatasetMeta").textContent="✗ "+e.message);};
+$("batchSplit").onchange=()=>refreshBatchMeta().catch(e=>$("batchDatasetMeta").textContent="✗ "+e.message);
+$("batchRun").onclick=()=>runBatch();
+$("batchStop").onclick=()=>{batchAbort=true;$("batchStatus").textContent="已请求停止；当前条目完成后结束。";};
+$("batchClear").onclick=()=>{$("batchResults").innerHTML="";$("batchStatus").textContent="";$("batchDetail").style.display="none";};
+
 </script>
 </body>
 </html>
