@@ -1,0 +1,19 @@
+{
+  "total": 2992,
+  "byDomain": {
+    "SMART_HOME": 478,
+    "DEVICE": 788,
+    "TASK": 720,
+    "WEATHER": 1006
+  },
+  "byStyle": {
+    "source": 1496,
+    "polite": 375,
+    "spoken": 371,
+    "confirming": 250,
+    "contextual": 250,
+    "direct": 250
+  },
+  "skeletons": 125,
+  "contract": "morpheme-v2-2026-09-11"
+}
