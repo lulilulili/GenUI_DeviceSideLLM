@@ -4,9 +4,11 @@
 → 组件推导 → 能力绑定(真实注册表, 不再mock) → 尺寸/信息预算
 → PDF原型匹配 或 层级式自由布局 → RenderSpec → HTML/A2UI/DSL
 """
+import copy
 import json
 
 from genui_intent.events import Trace, TracedProvider
+
 from . import protocol
 from .capability import bind, keys_for_domain
 from .derive import apply as derive_components
@@ -17,7 +19,8 @@ from .variants import apply_variant
 
 # 可插拔适配层开关（借鉴 CreateMyCard 的部分）。全部 False 时链路与引入前逐字节一致。
 DEFAULT_FEATURES = {"variants": True, "ux_budget": True}
-from .layout import plan as plan_layout, render_spec as build_render_spec
+from .layout import plan as plan_layout
+from .layout import render_spec as build_render_spec
 from .render import render_all
 from .router import route
 
@@ -73,6 +76,25 @@ class PipelineV2:
         with trace.stage("normalize", draft) as event:
             draft, role_corrections = protocol.normalize_draft(draft)
             event["output"] = {"draft": draft, "corrections": role_corrections}
+        return self._render_normalized(draft, card_size, style_id, domain, trace, role_corrections)
+
+    def render_draft(self, draft, card_size="AUTO", style_id="auto", domain=None):
+        """从已有 MorphemeDraft 进入确定性后半段，不调用模型。"""
+        if card_size not in ("AUTO", "2x1", "2x2", "3x2", "3x3"):
+            raise ValueError("未知卡片尺寸")
+        if not isinstance(draft, dict):
+            raise TypeError("draft 必须是 JSON object")
+        errors = protocol.validate_draft(draft, card_size)
+        if errors:
+            raise GenerationError("草稿校验失败: " + "; ".join(errors))
+        draft = copy.deepcopy(draft)
+        trace = Trace(self.on_event)
+        with trace.stage("normalize", draft) as event:
+            normalized, role_corrections = protocol.normalize_draft(draft)
+            event["output"] = {"draft": normalized, "corrections": role_corrections}
+        return self._render_normalized(normalized, card_size, style_id, domain, trace, role_corrections)
+
+    def _render_normalized(self, draft, card_size, style_id, domain, trace, role_corrections):
         with trace.stage("expand", draft) as event:
             spec = protocol.expand_draft(draft, card_size)
             event["output"] = spec

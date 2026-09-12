@@ -6,15 +6,24 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from genui_intent.config import Settings
-from genui_intent.providers import create_provider
 from genui_intent.layout_engine import TEMPLATES
+from genui_intent.providers import create_provider
+
 from . import protocol
+from .batch import (
+    assistant_json,
+    domain_from_row,
+    load_jsonl,
+    parse_indices,
+    request_from_row,
+)
 from .capability import PROVIDERS
 from .elision import plan_label_visibility
-from .layout import plan as plan_layout, render_spec as build_render_spec
+from .layout import plan as plan_layout
+from .layout import render_spec as build_render_spec
+from .pipeline import MockProviderV2, PipelineV2
 from .refine import coalesce
 from .render import render_all
-from .pipeline import PipelineV2, MockProviderV2
 from .tokens import SIZES, STYLES
 
 _LAB_TYPES = {"TEXT", "METRIC", "STATUS", "PROGRESS", "SWITCH", "SLIDER",
@@ -59,20 +68,20 @@ def run_layout_test(body):
     morphemes = []
     for index, item in enumerate(raw):
         if not isinstance(item, dict) or item.get("type") not in _LAB_TYPES:
-            raise ValueError("morphemes[%d].type 非法" % index)
+            raise ValueError(f"morphemes[{index}].type 非法")
         kind = item["type"]
         role = item.get("role") or ("PRIMARY" if index == 0 else
                                     "PRIMARY_ACTION" if kind in ("BUTTON", "SWITCH", "SLIDER")
                                     else "SECONDARY")
         if role not in protocol.ROLE_PRIORITY:
-            raise ValueError("morphemes[%d].role 非法" % index)
+            raise ValueError(f"morphemes[{index}].role 非法")
         label = str(item.get("label") or kind)[:40]
         value_type = item.get("valueType") or _LAB_DEFAULT_VT[kind]
         content = item.get("content") if isinstance(item.get("content"), dict) else \
             _lab_content(kind, label, item.get("value"))
         priority = item.get("priority")
         morphemes.append({
-            "id": "t%d" % (index + 1), "type": kind, "role": role,
+            "id": f"t{index + 1}", "type": kind, "role": role,
             "priority": max(0, min(100, int(priority))) if isinstance(priority, (int, float))
             else protocol.ROLE_PRIORITY[role],
             "label": label, "semanticKey": str(item.get("q") or "lab." + kind.lower()),
@@ -92,7 +101,21 @@ def run_layout_test(body):
 ROOT = Path(__file__).resolve().parents[1]
 WEB = ROOT / "web_v2"
 LEGACY_ASSETS = ROOT / "web" / "assets"
+DATASET_ROOT = ROOT / "data" / "datasets" / "gd-morpheme-3b-v1"
 TOKEN = secrets.token_urlsafe(32)
+
+
+def dataset_path(split):
+    if split not in ("train", "dev", "test"):
+        raise ValueError("split 必须是 train/dev/test")
+    path = DATASET_ROOT / f"gd_{split}.jsonl"
+    if not path.is_file():
+        raise ValueError("找不到数据集：" + str(path))
+    return path
+
+
+def dataset_rows(split):
+    return load_jsonl(dataset_path(split))
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -134,6 +157,21 @@ class Handler(BaseHTTPRequestHandler):
             self._send(json.dumps(payload, ensure_ascii=False).encode("utf-8"),
                        "application/json; charset=utf-8")
             return
+        if path == "/api/dataset":
+            try:
+                split = (urlparse(self.path).query or "").split("split=", 1)[-1] or "train"
+                rows = dataset_rows(split)
+                payload = {"split": split, "count": len(rows),
+                           "items": [{"index": i, "caseId": row.get("skeleton_id"),
+                                      "request": request_from_row(row),
+                                      "domain": domain_from_row(row), "task": row.get("task")}
+                                     for i, row in enumerate(rows, 1)]}
+            except Exception as exc:
+                self.send_error(400, str(exc).encode("ascii", "replace").decode())
+                return
+            self._send(json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+                       "application/json; charset=utf-8")
+            return
         if path.startswith("/assets/") and path.endswith(".jpg") and "/.." not in path:
             target = LEGACY_ASSETS / path[len("/assets/"):]
             if target.is_file() and target.resolve().is_relative_to(LEGACY_ASSETS.resolve()):
@@ -142,7 +180,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_error(404)
 
     def do_POST(self):
-        if self.path not in ("/api/run", "/api/layout-test"):
+        if self.path not in ("/api/run", "/api/layout-test", "/api/batch"):
             self.send_error(404)
             return
         if self.headers.get("X-Workbench-Token") != TOKEN:
@@ -160,6 +198,9 @@ class Handler(BaseHTTPRequestHandler):
                 return
             self._send(json.dumps(result, ensure_ascii=False).encode("utf-8"),
                        "application/json; charset=utf-8")
+            return
+        if self.path == "/api/batch":
+            self._handle_batch()
             return
         try:
             size = int(self.headers.get("Content-Length", "0"))
@@ -211,6 +252,87 @@ class Handler(BaseHTTPRequestHandler):
             return
         except Exception as exc:
             send({"type": "done", "ok": False, "error": str(exc)})
+
+    def _handle_batch(self):
+        try:
+            size = int(self.headers.get("Content-Length", "0"))
+            if not 0 < size < 200000:
+                raise ValueError("请求大小无效")
+            body = json.loads(self.rfile.read(size))
+            split = body.get("split", "train")
+            rows = dataset_rows(split)
+            raw_indices = body.get("indices", "1")
+            index_text = raw_indices if isinstance(raw_indices, str) else \
+                ",".join(str(value) for value in raw_indices)
+            indices = parse_indices(index_text, len(rows), 100)
+            mode = body.get("mode", "json")
+            if mode not in ("json", "prompt"):
+                raise ValueError("mode 必须是 json 或 prompt")
+            card_size = body.get("card_size", "AUTO")
+            style_id = body.get("style_id", "auto")
+            provider_name = body.get("provider", "ollama")
+            client = self._make_client(body, provider_name) if mode == "prompt" else MockProviderV2()
+        except Exception as exc:
+            self.send_error(400, str(exc).encode("ascii", "replace").decode())
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Connection", "close")
+        self.end_headers()
+        self.close_connection = True
+        api_key = str(body.get("api_key", ""))
+
+        def send(event):
+            data = json.dumps(event, ensure_ascii=False)
+            if api_key:
+                data = data.replace(api_key, "[REDACTED]")
+            self.wfile.write((data + "\n").encode("utf-8"))
+            self.wfile.flush()
+
+        total = len(indices)
+        try:
+            for position, index in enumerate(indices, 1):
+                row = rows[index - 1]
+                send({"type": "item_start", "index": index, "position": position, "total": total,
+                      "request": request_from_row(row)})
+                try:
+                    events = []
+                    pipeline = PipelineV2(client, on_event=events.append,
+                                          features=body.get("features"))
+                    if mode == "json":
+                        result = pipeline.render_draft(assistant_json(row), card_size, style_id,
+                                                       domain_from_row(row))
+                    else:
+                        result = pipeline.generate(request_from_row(row), card_size, style_id)
+                    for event in events:
+                        event["itemIndex"] = index
+                        send(event)
+                    send({"type": "item_result", "index": index, "ok": True,
+                          "request": request_from_row(row), "result": result})
+                except (BrokenPipeError, ConnectionResetError):
+                    return
+                except Exception as exc:
+                    send({"type": "item_result", "index": index, "ok": False,
+                          "request": request_from_row(row), "error": str(exc)})
+            send({"type": "done", "ok": True, "total": total})
+        except (BrokenPipeError, ConnectionResetError):
+            return
+
+    @staticmethod
+    def _make_client(body, provider_name):
+        if provider_name == "mock":
+            return MockProviderV2()
+        base = str(body.get("base_url", "")).rstrip("/")
+        url = urlparse(base)
+        if url.scheme not in ("http", "https") or not url.hostname or url.username or url.password:
+            raise ValueError("API 地址应为不含凭据的 HTTP(S) 地址")
+        if url.scheme == "http" and url.hostname not in ("localhost", "127.0.0.1", "::1"):
+            raise ValueError("外部 API 请使用 HTTPS")
+        settings = Settings(provider_name, body.get("model", ""), base, body.get("api_key", ""),
+                            max(5, min(600, float(body.get("timeout", 180)))),
+                            body.get("response_mode", "json_schema"))
+        return create_provider(settings)
 
 
 if __name__ == "__main__":
