@@ -1,0 +1,14 @@
+{
+  "dataset": "sft_train_v1",
+  "samples": 2687,
+  "L1_exact_dup_groups": 25,
+  "L2_near_dup_pairs": 577,
+  "L2_near_dup_rate": 0.2147,
+  "L2_note": "风格轴×2 为刻意增广，近重复率含其贡献；危险的是跨答案冲突",
+  "L2_cross_answer_conflicts": 0,
+  "L2_conflict_examples": [],
+  "L3_frozen_exact": 0,
+  "L3_frozen_near060": 0,
+  "L4_distinct_answers": 125,
+  "L4_top_answer_share": 0.0089
+}

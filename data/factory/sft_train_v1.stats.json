@@ -1,19 +1,18 @@
 {
-  "total": 2992,
+  "datasetVersion": "1.1",
+  "total": 2687,
   "byDomain": {
-    "SMART_HOME": 478,
-    "DEVICE": 788,
-    "TASK": 720,
-    "WEATHER": 1006
-  },
-  "byStyle": {
-    "source": 1496,
-    "polite": 375,
-    "spoken": 371,
-    "confirming": 250,
-    "contextual": 250,
-    "direct": 250
+    "SMART_HOME": 464,
+    "DEVICE": 719,
+    "TASK": 642,
+    "WEATHER": 862
   },
   "skeletons": 125,
+  "v11Changes": {
+    "crossSkeletonConflictQueriesDropped": 152,
+    "postExpandConflictSamplesDropped": 1
+  },
+  "health": "PASS(见 sft_train_v1.health.json)",
+  "leakage": "三层通过",
   "contract": "morpheme-v2-2026-09-11"
 }
